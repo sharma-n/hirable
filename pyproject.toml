@@ -1,0 +1,20 @@
+[project]
+name = "hirable"
+version = "0.1.0"
+description = "An LLM app used to make tailor-made resume and CV for any specific job opportunity."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docling>=2.31.0",
+    "langchain>=0.3.25",
+    "langchain-openai>=0.3.16",
+    "langgraph>=0.4.1",
+    "mcp[cli]>=1.7.1",
+    "pydantic>=2.11.4",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "langchain-ollama>=0.3.2",
+]

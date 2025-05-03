@@ -1,0 +1,5 @@
+llm:
+  provider: 'ollama'
+  small: 'phi4:latest'
+  large: 'phi4:latest'
+  temperature: 0.7

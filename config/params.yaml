@@ -1,5 +1,5 @@
 llm:
-  provider: 'ollama'
-  small: 'phi4:latest'
-  large: 'phi4:latest'
+  provider: 'openai'
+  small: 'gpt-4.1-nano'
+  large: 'gpt-4.1-nano'
   temperature: 0.7

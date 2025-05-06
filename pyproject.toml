@@ -5,6 +5,7 @@ description = "An LLM app used to make tailor-made resume and CV for any specifi
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "beautifulsoup4>=4.13.4",
     "docling>=2.31.0",
     "langchain>=0.3.25",
     "langchain-openai>=0.3.16",

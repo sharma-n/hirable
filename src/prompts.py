@@ -5,7 +5,7 @@ Parse a text-formatted resume efficiently and extract the applicant's data into 
 <input>
 The following text is the applicant's resume in plain text format:
 
-{resume_text}
+{resume_raw}
 </input>
 
 <instructions>
@@ -32,3 +32,15 @@ Follow these steps to extract and structure the resume information:
    - Review the extracted data for consistency and completeness.
    - Ensure all required fields are populated if the information is available in the resume.
 </instructions>"""
+
+INGEST_JOB_PROMPT = """
+<task>
+Identify the key details from a job description and company overview to create a structured output. Focus on extracting the most crucial and concise information that would be most relevant for tailoring a resume to this specific job.
+</task>
+
+<job_description>
+{job_description_raw}
+</job_description>
+
+Note: The "keywords", "job_duties_and_responsibilities", and "required_qualifications" sections are particularly important for resume tailoring. Ensure these are as comprehensive and accurate as possible.
+"""

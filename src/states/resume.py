@@ -1,11 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field, computed_field
-import logging
 
 from src.utils.parse import parse_file
-
-
-logger = logging.getLogger(__name__)
 
 class BasicInfo(BaseModel):
     name: str = Field(description="The name of the person.")
@@ -18,7 +14,7 @@ class BasicInfo(BaseModel):
 
     def __str__(self):
         return f"## Basic Information\n- Name: {self.name}\n"\
-            + ("" if self.one_liner is None else f"- One liner description: {self.one_liner}")\
+            + ("" if self.one_liner is None else f"- One liner description: {self.one_liner}\n")\
             + f"- Email: {self.email}\n"\
             + f"- Phone number: {self.phone_number}\n"\
             + ("" if self.summary is None else f"- Summary: {self.summary}\n")\
@@ -80,7 +76,7 @@ class InputFile(BaseModel):
 
     @computed_field
     @property
-    def resume_text(self) -> str:
+    def resume_raw(self) -> str:
         return parse_file(self.filepath)
 
 class Resume(BaseModel):

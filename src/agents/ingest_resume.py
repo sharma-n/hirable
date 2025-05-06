@@ -18,7 +18,7 @@ async def ingest_resume(state: InputFile) -> Resume:
         Resume: A structured representation of the resume data.
     """
     llm = get_llm(size='small').with_structured_output(Resume)
-    prompt = INGEST_RESUME_PROMPT.format(resume_text=state.resume_text)
+    prompt = INGEST_RESUME_PROMPT.format(resume_raw=state.resume_raw)
     resume = await llm.ainvoke(prompt)
     return resume
 

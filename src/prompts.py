@@ -18,6 +18,7 @@ Follow these steps to extract and structure the resume information:
 2. Extract Information:
    - Systematically parse each section, extracting relevant details. Ensure that you reproduce details verbatim from the original text. Do not include any additional context or explanations beyond what's directly stated in the text.
    - Pay attention to dates, titles, organizations, and descriptions.
+   - Ensure that all the information in the text is extracted.
 
 3. Handle Variations:
    - Account for different resume styles, formats, and section orders.

@@ -13,8 +13,8 @@ class BasicInfo(BaseModel):
     email: str = Field(description="The email address of the person. For example, id@provider.com")
     phone_number: str = Field(description="The phone number of the person. Include the country code if provided.")
     summary: Optional[str] = Field(default=None, description="A brief summary of the person's work or interests.")
-    links: Optional[dict] = Field(default=None, description="A dictionary containing links to social media profiles or other relevant information. For example, {'LinkedIn': 'https://www.linkedin.com/in/example', 'GitHub': 'https://github.com/example', 'Medium': 'https://medium.com/example'}")
-    residence_status: Optional[str] = Field(default=None, description="The residence status of the person. This can be nationality, visa status etc.", examples=['U.S. Citizen', 'U.S. Green Card', 'Permanent Resident'])
+    links: Optional[list[str]] = Field(default=None, description="A list containing links to social media profiles. For example, ['LinkedIn: https://www.linkedin.com/in/example', 'GitHub: https://github.com/example', 'Medium: https://medium.com/example']")
+    residence_status: Optional[str] = Field(default=None, description="The residence status of the person. This can be nationality, visa status etc. For example, 'U.S. Citizen', 'U.S. Green Card', 'Permanent Resident'")
 
     def __str__(self):
         return f"## Basic Information\n- Name: {self.name}\n"\
@@ -31,7 +31,7 @@ class Experience(BaseModel):
     location: str = Field(description="The location of the company.")
     start: str = Field(description="The start date of the job, in %B %Y format, for example July 2023.")
     end: str = Field(description="The end date of the job, in %B %Y format, for example July 2023. If still in current position, reply with 'Present'")
-    descriptions: list[str] = Field(description="A list of points describing the responsibilities and achievements while in the job role.", min_items=1)
+    descriptions: list[str] = Field(description="A list of points describing the responsibilities and achievements while in the job role.")
     other_info: Optional[str] = Field(description="Any additional information about the experience, such as any relevant skills or accomplishments.")
 
     def __str__(self):
@@ -92,7 +92,7 @@ class Resume(BaseModel):
     awards: Optional[list[str]] = Field(default=None, description="Awards received by the individual. Each award should be listed with its description if provided..")
     certifications: Optional[list[str]] = Field(default=None, description="Certifications obtained by the individual. Each certification should be listed with its description if provided.")
     languages: Optional[list[str]] = Field(default=None, description="Languages spoken by the individual. Each language should be listed the proficiency level if provided.")
-    skills: list[dict] = Field(description="A dictionary where each key is a group name and values are the skills within that group. If groups are not provided for the skills, then group them based on types (e.g., programming, design, etc.).")
+    skills: list[str] = Field(description="A list of grouped skills that the resume mentions. If groups are not provided for the skills, then group them based on types (e.g., programming, design, etc.). Each element of the list should be in the form of 'Group: comma separated skills in the group'")
     other_info: Optional[str] = Field(default=None, description="Additional information from the resume that is not captured in the previous fields. You should group similar information together under a heading and the write each piece of information as a bullet point.")
 
     def __str__(self):

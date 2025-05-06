@@ -23,7 +23,7 @@ class BasicInfo(BaseModel):
             + f"- Phone number: {self.phone_number}\n"\
             + ("" if self.summary is None else f"- Summary: {self.summary}\n")\
             + ("" if self.residence_status is None else f"- Residence status: {self.residence_status}\n")\
-            + ("" if self.links is None else f"- Links: {', '.join([f'{k}: {v}' for k, v in self.links.items()])}\n") + "\n"
+            + ("" if self.links is None else f"- Links: {', '.join(self.links)}\n") + "\n"
 
 class Experience(BaseModel):
     title: str = Field(description="The title of the job role.")
@@ -35,9 +35,9 @@ class Experience(BaseModel):
     other_info: Optional[str] = Field(description="Any additional information about the experience, such as any relevant skills or accomplishments.")
 
     def __str__(self):
-        return f"### {self.title} at {self.company}, {self.location}\n from {self.start} to {self.end}\n"\
-            + f"Responsibilities and Achievements:\n- " + "\n- ".join(self.descriptions) + "\n\n"\
-            + ("" if self.other_info is None else f"Other Information:\n{self.other_info}") + "\n"
+        return f"### {self.title} at {self.company}, {self.location} from {self.start} to {self.end}\n"\
+            + f"Responsibilities and Achievements:\n- " + "\n- ".join(self.descriptions) + "\n"\
+            + ("" if self.other_info is None else f"\nOther Information:\n{self.other_info}") + "\n"
 
 class Education(BaseModel):
     degree: str = Field(description="The degree obtained.")
@@ -98,14 +98,14 @@ class Resume(BaseModel):
     def __str__(self):
         return "# Resume\n"\
             + str(self.basic_info)\
-            + "## Work Experience\n" + '\n'.join(self.experience)\
-            + "## Education\n" + '\n'.join(self.education)\
-            + "## Projects\n" + '\n'.join(self.projects)\
-            + ("" if self.publications is None else "## Publications\n- " + '\n- '.join(self.publications) + "\n")\
-            + ("" if self.awards is None else "## Awards\n- " + '\n- '.join(self.awards) + "\n")\
+            + "## Work Experience\n" + '\n'.join([str(e) for e in self.experience])\
+            + "## Education\n" + '\n'.join([str(e) for e in self.education]) + '\n'\
+            + "## Projects\n" + '\n'.join([str(p) for p in self.projects]) + '\n'\
+            + ("" if self.publications is None else "## Publications\n- " + '\n'.join([str(p) for p in self.publications]) + "\n")\
+            + ("" if self.awards is None else "## Awards\n- " + '\n- '.join(self.awards) + "\n\n")\
             + ("" if self.certifications is None else "## Certifications\n- " + '\n- '.join(self.certifications) + "\n")\
-            + ("" if self.languages is None else "## Languages\n- " + '\n- '.join(self.languages) + "\n")\
-            + "## Skills\n- " + '\n- '.join([f"{k}: {v}" for k, v in self.skills.items()]) + "\n"\
+            + ("" if self.languages is None else "## Languages\n- " + '\n- '.join(self.languages) + "\n\n")\
+            + "## Skills\n- " + '\n- '.join(self.skills) + "\n"\
             + ("" if self.other_info is None else f"## Other Information\n{self.other_info}") + "\n"\
 
 class FullState(InputFile, Resume):

@@ -1,9 +1,5 @@
 from dataclasses import dataclass
-import logging
 import yaml
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 @dataclass
 class ModelConfig:

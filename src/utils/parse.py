@@ -21,7 +21,6 @@ def parse_file(filepath):
     filepath = Path(filepath)
     text = ''
     if filepath.exists():
-        logger.info(f"Loading resume from {filepath}")
         if filepath.suffix == '.pdf':
             converter = DocumentConverter()
             result = converter.convert(filepath)

@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 from src.utils.parse import parse_file
 
@@ -71,14 +71,6 @@ class Publication(BaseModel):
     def __str__(self):
         return f"- {self.title} by {', '.join(self.authors)}" + ("" if self.description is None else f": {self.description}.") + ("" if self.link is None else f" Link: {self.link}") + "\n"
 
-class InputFile(BaseModel):
-    filepath: str = Field(description="The path to the input resume file.")
-
-    @computed_field
-    @property
-    def resume_raw(self) -> str:
-        return parse_file(self.filepath)
-
 class Resume(BaseModel):
     basic_info: BasicInfo = Field(description="Personal information such as name, email, phone number.")
     experience: list[Experience] = Field(description="Professional experience including job title, company, location, and duration.")
@@ -102,7 +94,4 @@ class Resume(BaseModel):
             + ("" if self.certifications is None else "## Certifications\n- " + '\n- '.join(self.certifications) + "\n")\
             + ("" if self.languages is None else "## Languages\n- " + '\n- '.join(self.languages) + "\n\n")\
             + "## Skills\n- " + '\n- '.join(self.skills) + "\n"\
-            + ("" if self.other_info is None else f"## Other Information\n{self.other_info}") + "\n"\
-
-class FullState(InputFile, Resume):
-    pass
+            + ("" if self.other_info is None else f"## Other Information\n{self.other_info}") + "\n"

@@ -1,14 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, Field, computed_field
-from src.utils.parse import parse_url
-
-class InputURL(BaseModel):
-    url: str = Field(description="The URL to the job posting.")
-
-    @computed_field
-    @property
-    def job_desc_raw(self) -> str:
-        return parse_url(self.url)
+from pydantic import BaseModel, Field
 
 class JobDescription(BaseModel):
     title: str = Field(description="The title of the job.")
@@ -22,6 +13,3 @@ class JobDescription(BaseModel):
     company_description: str = Field(description="A description of the company, including information about the company's mission, values, history, and culture. This information is useful to tailor a resume or cover letter to the company's culture.")
     compliance_text: Optional[str] = Field(default=None, description="Text that is added into a job description primarily for compliance reasons. This includes things related to \"equal opportunity employment\" and \"non-discrimination policies.\"")
     miscellaneous: Optional[str] = Field(default=None, description="Additional notes or comments that may be relevant to the job posting that has not been covered in the previous fields.")
-
-class FullState(InputURL, JobDescription):
-    pass

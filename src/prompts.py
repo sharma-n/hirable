@@ -1,5 +1,14 @@
-INGEST_RESUME_PROMPT = """
+INGEST_RESUME_PROMPT = """<objective>
 Parse a text-formatted resume efficiently and extract the applicant's data into a structured format.
+</objective>
+
+<input>
+The following text is the applicant's resume in plain text format:
+
+{resume_raw}
+</input>
+
+<instructions>
 Follow these steps to extract and structure the resume information:
 
 1. Analyze Structure:
@@ -22,16 +31,12 @@ Follow these steps to extract and structure the resume information:
 6. Validate:
    - Review the extracted data for consistency and completeness.
    - Ensure all required fields are populated if the information is available in the resume.
-
-<input>
-The following text is the applicant's resume in plain text format:
-
-{resume_raw}
-</input>
+</instructions>
 """
 
-INGEST_JOB_PROMPT = """
+INGEST_JOB_PROMPT = """<task>
 Identify the key details from a job description and company overview to create a structured output. Focus on extracting the most crucial and concise information that would be most relevant for tailoring a resume to this specific job.
+</task>
 
 <job_description>
 {job_description_raw}
@@ -41,7 +46,9 @@ Note: The "keywords", "job_duties_and_responsibilities", and "required_qualifica
 """
 
 ADAPT_SYSTEM_PROMPT = """
-You are a highly experienced career advisor with extensive experience in helping job seekers optimize their resumes and cover letters. Your goal is to provide personalized advice on how to adapt a resume and cover letter based on the provided job description and company overview.
+I am a highly experienced career advisor and resume writing expert with 15 years of specialized experience.
+
+Primary role: Craft exceptional resumes and cover letters tailored to specific job descriptions, optimized for both ATS systems and human readers.
 
 <guidelines>
 To ensure that you perform your best, please keep in mind these guidelines:
@@ -95,7 +102,7 @@ ADAPT_EDUCATION_PROMPT = """
 Optimize the education section to be concise and relevant.
 - For each educational entry, highlight any honors, relevant coursework, or academic projects that align with the job requirements.
 - If the candidate has extensive work experience, keep this section brief and to the point.
-</gpa>
+</task>
 
 <current_education>
 This is the current education section from the candidate's resume:
@@ -144,25 +151,23 @@ This is the current skills section from the candidate's resume:
 </current_skills>
 """
 
-COVER_LETTER_PROMPT = """
-You are a highly experienced career advisor. Your task is to write a compelling cover letter for a job applicant.
-The cover letter should be tailored to the specific job description and highlight how the applicant's skills and experiences, as detailed in their adapted resume, make them an ideal candidate.
-
-<guidelines>
-To ensure that you perform your best, please keep in mind these guidelines:
-1.  **Professional Tone**: Maintain a formal and professional tone throughout the letter.
-2.  **Conciseness**: Keep the letter concise, ideally one page.
-3.  **Highlight Key Matches**: Directly reference skills and experiences from the adapted resume that align with the job description.
-4.  **Quantify Achievements**: Where possible, include quantifiable achievements from the resume to demonstrate impact.
-5.  **Call to Action**: Conclude with a clear call to action, expressing enthusiasm for an interview.
-6.  **No Placeholder Brackets**: Do not include any placeholder brackets like [Hiring Manager Name] or [Company Address].
-</guidelines>
+COVER_LETTER_PROMPT = """<task>
+create a compelling, concise cover letter that aligns my resume/work information with the job description and company value. Analyze and match my qualifications with the job requirements. Then, create cover letter.
+</task>
 
 <job_description>
 {job_description}
 </job_description>
 
-<adapted_resume>
+<my_work_information>
 {adapted_resume}
-</adapted_resume>
+</my_work_information>
+
+<guidelines>
+- Highlight my unique qualifications for this specific role and company culture in a concise bulleted list for easy readability.
+- Focus on the value I can bring to the employer, including 1-2 specific examples of relevant achievements.
+- Keep the entire letter brief (250-300 words max) and directly aligned with the job requirements.
+- Do not repeat information verbatim from my resume. Instead, elaborate on or provide context for key points.
+- No Placeholder Brackets: Do not include any placeholder brackets like [Hiring Manager Name] or [Company Address].
+</guidelines>
 """

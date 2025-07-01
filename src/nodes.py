@@ -6,10 +6,11 @@ from src.states.job_desc import JobDescription
 from src.states.resume import (
     Resume,
     BasicInfo,
-    Experience,
-    Education,
-    Project,
-    Publication
+    Experiences,
+    Educations,
+    Projects,
+    Publications,
+    Skills
 )
 from src.utils.llm import get_llm
 from src.prompts import (
@@ -63,11 +64,11 @@ async def adapt_resume(state: FullState) -> dict:
 
     sections_to_adapt = [
         (ADAPT_BASIC_INFO_PROMPT.format(basic_info=state.resume.basic_info), BasicInfo, 'small'),
-        (ADAPT_EXPERIENCES_PROMPT.format(experiences='\n'.join([str(e) for e in state.resume.experience])), list[Experience], 'large'),
-        (ADAPT_EDUCATION_PROMPT.format(education='\n'.join([str(e) for e in state.resume.education])), list[Education], 'small'),
-        (ADAPT_PROJECTS_PROMPT.format(projects='\n'.join([str(p) for p in state.resume.projects])), list[Project], 'large'),
-        (ADAPT_PUBLICATIONS_PROMPT.format(publications='\n'.join([str(p) for p in state.resume.publications])), list[Publication], 'small'),
-        (ADAPT_SKILLS_PROMPT.format(skills=state.resume.skills), list[str], 'small')
+        (ADAPT_EXPERIENCES_PROMPT.format(experiences=state.resume.experience), Experiences, 'medium'),
+        (ADAPT_EDUCATION_PROMPT.format(education=state.resume.education), Educations, 'small'),
+        (ADAPT_PROJECTS_PROMPT.format(projects=state.resume.projects), Projects, 'medium'),
+        (ADAPT_PUBLICATIONS_PROMPT.format(publications=state.resume.publications), Publications, 'small'),
+        (ADAPT_SKILLS_PROMPT.format(skills=state.resume.skills), Skills, 'small')
     ]
 
     tasks = []
@@ -80,7 +81,7 @@ async def adapt_resume(state: FullState) -> dict:
     resume_out = Resume(
         basic_info=results[0],
         experience=results[1],
-        education=results[2],
+        education=results[2], 
         projects=results[3],
         publications=results[4],
         skills=results[5],

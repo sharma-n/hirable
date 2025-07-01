@@ -1,7 +1,10 @@
 
+from pathlib import Path
 import streamlit as st
 import asyncio
 import re
+
+import yaml
 
 from src.graph import get_graph
 from src.states import InputState
@@ -41,7 +44,7 @@ else:
 
 # Resume Upload
 st.header("2. Upload Your Resume")
-resume_file = st.file_uploader("Upload Resume (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"])
+resume_file = st.file_uploader("Upload Resume (PDF, DOCX, TXT, YAML)", type=["pdf", "docx", "txt", "yaml"])
 
 # Process Button
 st.header("3. Generate Tailored Documents")
@@ -52,24 +55,21 @@ if st.button("Generate Tailored Resume & Cover Letter"):
         st.warning("Please provide either a job description URL or paste the job description text.")
     else:
         with st.spinner("Processing your documents... This may take a moment."):
-            # Parse resume file
-            resume_raw_content = parse_file(resume_file)
+            resume_input_args = {}
+            if resume_file:
+                if Path(resume_file.name).suffix.lower()=='.yaml':
+                    resume_input_args['resume_yaml'] = yaml.safe_load(resume_file.getvalue())
+                else:
+                    resume_input_args['resume_raw'] = parse_file(resume_file)
 
-            # Initialize graph and state
+                if job_desc_input_method == "URL":
+                    resume_input_args['job_url'] = job_description_url
+                else:
+                    resume_input_args['job_desc_raw'] = job_description_input
+
+            # Initialize graph and run
             graph = get_graph()
-            
-            if job_description_url:
-                state = InputState(
-                    job_url=job_description_url,
-                    resume_raw=resume_raw_content
-                )
-            else:
-                state = InputState(
-                    job_desc_raw=job_description_input,
-                    resume_raw=resume_raw_content
-                )
-
-            # Run the graph
+            state = InputState(**resume_input_args)
             output = asyncio.run(graph.ainvoke(input=state))
 
             st.success("Documents processed successfully!")

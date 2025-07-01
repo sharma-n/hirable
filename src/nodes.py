@@ -61,6 +61,13 @@ async def ingest_resume(state: InputState) -> dict:
     logger.info("Finished ingest_resume function.")
     return {'resume': resume}
 
+async def load_resume_from_yaml_node(state: InputState) -> dict:
+    """
+    Loads a Pydantic Resume object from a YAML file.
+    """
+    logger.info(f"Loading resume from YAML")
+    return {'resume': Resume.model_validate(state.resume_yaml)}
+
 async def adapt_resume(state: FullState) -> dict:
     """
     Adapt the resume to the job description.

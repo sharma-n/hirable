@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 class InputState(BaseModel):
     job_url: Optional[str] = Field(default=None, description="The URL to the job posting.")
     job_desc_raw: Optional[str] = Field(default=None, description="The raw text of the job description.")
-    resume_raw: str = Field(description="The raw text of the resume.")
+    resume_raw: Optional[str] = Field(default=None, description="The raw text of the resume.")
+    resume_yaml: Optional[dict] = Field(default=None, description="A YAML dict containing a parsed resume.")
 
     @model_validator(mode='after')
     def validate_input(self):
@@ -20,9 +21,15 @@ class InputState(BaseModel):
             raise ValueError("At least one of job_desc_raw or url must be provided.")
         elif self.job_desc_raw is not None:
             logger.info(f"Job description is provided via raw text. Using it directly (URL will be ignored if provided).")
-            return self
-        logger.info(f"Job URL is provided. Parsing it to extract job description.")
-        self.job_desc_raw = parse_url(self.job_url)
+        else:
+            logger.info(f"Job URL is provided. Parsing it to extract job description.")
+            self.job_desc_raw = parse_url(self.job_url)
+
+        if self.resume_raw is None and self.resume_yaml is None:
+            raise ValueError("At least one of resume_raw or resume_yaml must be provided.")
+        elif self.resume_raw is not None and self.resume_yaml is not None:
+            logger.warning("Both resume_raw and resume_yaml are provided. Using resume_raw and ignoring resume_yaml. Will re-parse the resume, using an LLM.")
+            self.resume_yaml = None
         return self
     
 class OutputState(BaseModel):

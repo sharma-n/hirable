@@ -31,7 +31,8 @@ def parse_file(file_input) -> str:
             logger.error(f"File {filepath} does not exist.")
             raise FileNotFoundError(f"File {filepath} does not exist.")
         file_extension = filepath.suffix.lower()
-        file_obj = open(filepath, 'rb')
+        with filepath.open('rb') as f:
+            file_obj = io.BytesIO(f.read())
     else:
         # For Streamlit UploadedFile, read its content into BytesIO
         file_extension = Path(getattr(file_input, 'name', '')).suffix.lower()
@@ -48,11 +49,7 @@ def parse_file(file_input) -> str:
             text += para.text + '\n'
     elif file_extension == '.txt':
         # If file_obj is already opened in binary mode, decode
-        content = file_obj.read()
-        if isinstance(content, bytes):
-            text = content.decode('utf-8')
-        else:
-            text = content
+        text = file_obj.read().decode('utf-8')
     else:
         logger.error(f"Unsupported file format: {file_extension}")
         raise NotImplementedError

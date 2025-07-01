@@ -4,8 +4,8 @@ import yaml
 @dataclass
 class ModelConfig:
     provider: str = 'openai'
-    small: str = 'gpt-4o-mini'
-    large: str = 'gpt-4o'
+    small: str = 'gpt-4.1'
+    large: str = 'gpt-4.1-mini'
     temperature: float = 0.7
     requests_per_sec: int = 100
 

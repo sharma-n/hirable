@@ -79,3 +79,10 @@ if st.button("Generate Tailored Resume & Cover Letter"):
 
             st.subheader("Generated Cover Letter")
             st.markdown(output['cover_letter'])
+
+            # Add download button for the parsed resume (output['resume'])
+            st.download_button(
+                label="Download Parsed Resume (YAML)",
+                data=yaml.dump(output['resume'].model_dump(), sort_keys=False),
+                file_name="parsed_resume.yaml",
+            )

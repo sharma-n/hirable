@@ -83,9 +83,9 @@ async def adapt_resume(state: FullState) -> dict:
 
     sections_to_adapt = [
         (ADAPT_BASIC_INFO_PROMPT.format(basic_info=state.resume.basic_info), BasicInfo, 'small'),
-        (ADAPT_EXPERIENCES_PROMPT.format(experiences=state.resume.experience), Experiences, 'medium'),
+        (ADAPT_EXPERIENCES_PROMPT.format(experiences=state.resume.experience), Experiences, 'large'),
         (ADAPT_EDUCATION_PROMPT.format(education=state.resume.education), Educations, 'small'),
-        (ADAPT_PROJECTS_PROMPT.format(projects=state.resume.projects), Projects, 'medium'),
+        (ADAPT_PROJECTS_PROMPT.format(projects=state.resume.projects), Projects, 'large'),
         (ADAPT_PUBLICATIONS_PROMPT.format(publications=state.resume.publications), Publications, 'small'),
         (ADAPT_SKILLS_PROMPT.format(skills=state.resume.skills), Skills, 'small')
     ]
@@ -123,7 +123,7 @@ async def generate_cover_letter(state: FullState) -> dict:
         dict: A dictionary containing the generated cover letter.
     """
     logger.info("Starting generate_cover_letter function.")
-    llm = get_llm(size='small').with_structured_output(CoverLetter)
+    llm = get_llm(size='large').with_structured_output(CoverLetter)
     prompt = COVER_LETTER_PROMPT.format(
         job_description=state.job,
         adapted_resume=state.resume_out

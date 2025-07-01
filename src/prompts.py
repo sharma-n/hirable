@@ -24,11 +24,11 @@ Follow these steps to extract and structure the resume information:
    - Account for different resume styles, formats, and section orders.
    - Adapt the extraction process to accurately capture data from various layouts.
 
-5. Optimize Output:
+4. Optimize Output:
    - Handle missing or incomplete information appropriately (use null values or empty arrays/objects as needed).
    - Standardize date formats, if applicable.
 
-6. Validate:
+5. Validate:
    - Review the extracted data for consistency and completeness.
    - Ensure all required fields are populated if the information is available in the resume.
 </instructions>
@@ -37,6 +37,15 @@ Follow these steps to extract and structure the resume information:
 INGEST_JOB_PROMPT = """<task>
 Identify the key details from a job description and company overview to create a structured output. Focus on extracting the most crucial and concise information that would be most relevant for tailoring a resume to this specific job.
 </task>
+
+<instructions>
+1. **Keywords**: Extract all relevant keywords that appear in the job description. These should include technical skills, soft skills, industry-specific terms, and any other terms that an Applicant Tracking System (ATS) might look for.
+2. **Job Duties and Responsibilities**: Summarize the core duties and responsibilities of the role as described in the job description. Focus on action-oriented statements.
+3. **Required Qualifications**: List all mandatory qualifications, including educational requirements, years of experience, specific certifications, and essential skills.
+4. **Desired Qualifications**: List any preferred but not mandatory qualifications.
+5. **Company Description**: Briefly summarize the company's mission, values, and any relevant information that might help in tailoring a resume or cover letter.
+6. **Location**: Extract the job location.
+</instructions>
 
 <job_description>
 {job_description_raw}
@@ -70,26 +79,44 @@ The job for which is the candidate is applying for is given below:
 
 """
 
-ADAPT_BASIC_INFO_PROMPT = """
-<task>
+ADAPT_BASIC_INFO_PROMPT = """<task>
 Rewrite the basic information section of the resume to be more impactful and tailored to the job description. 
-- The one-liner should be a powerful summary of the candidate's professional identity, aligned with the target role.
-- The summary should be a 2-3 sentence narrative that highlights the candidate's key achievements and skills, directly addressing the employer's needs as stated in the job description.
 </task>
+
+<instructions>
+1. **One-liner**: Craft a powerful, concise one-liner (professional headline) that summarizes the candidate's professional identity and aligns directly with the target role and industry.
+2. **Summary**: Develop a 2-3 sentence narrative summary that highlights the candidate's most relevant achievements, skills, and career goals, directly addressing the employer's needs as stated in the job description.
+3. **Keywords**: Naturally integrate keywords from the job description into both the one-liner and summary to optimize for Applicant Tracking Systems (ATS).
+4. **Impact**: Ensure the summary emphasizes the candidate's potential contributions and value to the prospective employer.
+</instructions>
 
 <current_basic_info>
 This is the current basic information section from the candidate's resume:
 {basic_info}
 </current_basic_info>
+
+<example_of_good_resume_text>
+**One-liner Example:**
+"Highly motivated Software Engineer with expertise in scalable backend systems and cloud infrastructure."
+
+**Summary Example:**
+"Results-oriented Software Engineer with 5+ years of experience in developing and deploying robust web applications. Proven ability to lead cross-functional teams and deliver high-quality code, consistently exceeding project goals. Seeking to leverage strong problem-solving skills and technical acumen to contribute to innovative solutions at [Company Name]."
+</example_of_good_resume_text>
 """
 
-ADAPT_EXPERIENCES_PROMPT = """
-<task>
-Revise the work experience section to highlight the most relevant accomplishments for the target job. For each role:
-- Rephrase bullet points to start with strong action verbs and quantify achievements wherever possible (e.g., "Increased sales by 15%" instead of "Responsible for sales").
-- Emphasize responsibilities and achievements that directly match the requirements in the job description.
-- Ensure the language used reflects the keywords and terminology found in the job description.
+ADAPT_EXPERIENCES_PROMPT = """<task>
+Revise the work experience section to highlight the most relevant accomplishments for the target job.
 </task>
+
+<instructions>
+1. **Relevance**: Prioritize experiences and achievements that directly align with the job description's requirements and responsibilities.
+2. **Action Verbs**: Start each bullet point with a strong action verb to convey impact and initiative.
+3. **Quantify Achievements**: Wherever possible, quantify accomplishments with numbers, percentages, or specific outcomes (e.g., "Increased sales by 15%" instead of "Responsible for sales").
+4. **STAR Method**: Implicitly use the STAR (Situation, Task, Action, Result) method within bullet points to provide context and demonstrate impact.
+5. **Keywords**: Integrate keywords and terminology from the job description naturally into the descriptions.
+6. **Conciseness**: Keep bullet points concise and impactful, typically 1-2 lines each.
+7. **Truthfulness**: Ensure all information is accurate and verifiable.
+</instructions>
 
 <current_experiences>
 This is the current work experience section from the candidate's resume:
@@ -97,12 +124,17 @@ This is the current work experience section from the candidate's resume:
 </current_experiences>
 """
 
-ADAPT_EDUCATION_PROMPT = """
-<task>
+ADAPT_EDUCATION_PROMPT = """<task>
 Optimize the education section to be concise and relevant.
-- For each educational entry, highlight any honors, relevant coursework, or academic projects that align with the job requirements.
-- If the candidate has extensive work experience, keep this section brief and to the point.
 </task>
+
+<instructions>
+1. **Relevance**: Highlight educational achievements, coursework, and academic projects that are directly relevant to the job description.
+2. **Conciseness**: For candidates with extensive work experience, keep the education section brief and to the point.
+3. **Honors and Awards**: Include any honors, scholarships, or academic awards received.
+4. **Keywords**: Integrate relevant keywords from the job description into descriptions of coursework or projects.
+5. **Clarity**: Ensure dates, degrees, and institutions are clearly stated.
+</instructions>
 
 <current_education>
 This is the current education section from the candidate's resume:
@@ -110,13 +142,17 @@ This is the current education section from the candidate's resume:
 </current_education>
 """
 
-ADAPT_PROJECTS_PROMPT = """
-<task>
+ADAPT_PROJECTS_PROMPT = """<task>
 Tailor the projects section to showcase skills and experience relevant to the job.
-- For each project, write a compelling description that not only explains what the project was but also what the candidate's specific role and contributions were.
-- Highlight the technologies and skills used, especially those mentioned in the job description.
-- If possible, include a link to a live version or a repository.
 </task>
+
+<instructions>
+1. **Relevance**: Select projects that are most relevant to the target job description, highlighting skills and technologies mentioned.
+2. **Impact**: For each project, describe the candidate's specific role, contributions, and the impact of their work. Quantify achievements where possible.
+3. **Technologies**: Clearly list the technologies, tools, and methodologies used in each project, especially those aligning with the job requirements.
+4. **Links**: If available, include links to live versions, GitHub repositories, or project portfolios.
+5. **Conciseness**: Keep project descriptions concise and focused on outcomes.
+</instructions>
 
 <current_projects>
 This is the current projects section from the candidate's resume:
@@ -124,12 +160,17 @@ This is the current projects section from the candidate's resume:
 </current_projects>
 """
 
-ADAPT_PUBLICATIONS_PROMPT = """
-<task>
+ADAPT_PUBLICATIONS_PROMPT = """<task>
 If the publications are relevant to the job, present them in a clear and professional format.
-- Ensure all necessary bibliographic information is included (e.g., authors, title, journal, year).
-- If the list is long, consider only including the most relevant publications.
 </task>
+
+<instructions>
+1. **Relevance**: Include publications that are directly relevant to the target job or demonstrate valuable skills (e.g., research, writing, analytical skills).
+2. **Completeness**: Ensure all necessary bibliographic information is included (e.g., authors, title, journal/conference, year, volume, pages).
+3. **Conciseness**: If the candidate has a long list of publications, consider only including the most impactful and relevant ones.
+4. **Formatting**: Present publications in a consistent and professional citation style.
+5. **Impact**: Briefly describe the significance or impact of the publication if it adds value to the application.
+</instructions>
 
 <current_publications>
 This is the current publications section from the candidate's resume:
@@ -137,23 +178,49 @@ This is the current publications section from the candidate's resume:
 </current_publications>
 """
 
-ADAPT_SKILLS_PROMPT = """
-<task>
+ADAPT_SKILLS_PROMPT = """<task>
 Curate the skills section to mirror the requirements of the job description.
-- Group skills into relevant categories (e.g., Programming Languages, Software, Soft Skills).
-- Prioritize skills that are explicitly mentioned in the job description.
-- Remove any skills that are outdated or irrelevant to the target role.
 </task>
+
+<instructions>
+1. **Relevance**: Prioritize and include skills that are explicitly mentioned or strongly implied in the job description.
+2. **Categorization**: Group skills into logical and relevant categories (e.g., Programming Languages, Cloud Platforms, Tools, Soft Skills) for readability.
+3. **Specificity**: Be specific with skill names (e.g., "Python" instead of "Programming").
+4. **Removal**: Remove any skills that are outdated, irrelevant to the target role, or not present in the job description.
+5. **Order**: Within categories, consider ordering skills by proficiency or relevance to the job.
+</instructions>
 
 <current_skills>
 This is the current skills section from the candidate's resume:
 {skills}
 </current_skills>
+
+<example_of_good_resume_text>
+**Technical Skills:**
+- Programming Languages: Python, Java, C++, JavaScript, Go
+- Cloud Platforms: AWS (EC2, S3, Lambda), Azure, Google Cloud Platform
+- Databases: PostgreSQL, MongoDB, MySQL, Redis
+- Web Frameworks: Django, Flask, React, Angular, Node.js
+- Tools & Technologies: Docker, Kubernetes, Git, Jenkins, RESTful APIs, Microservices
+
+**Soft Skills:**
+- Problem-Solving, Communication, Teamwork, Leadership, Agile Methodologies, Project Management
+</example_of_good_resume_text>
 """
 
 COVER_LETTER_PROMPT = """<task>
-create a compelling, concise cover letter that aligns my resume/work information with the job description and company value. Analyze and match my qualifications with the job requirements. Then, create cover letter.
+Create a compelling, concise cover letter that aligns my resume/work information with the job description and company value. Analyze and match my qualifications with the job requirements. Then, create cover letter.
 </task>
+
+<instructions>
+1. **Personalization**: Address the letter to the hiring manager (if known) or the hiring team. Tailor the opening paragraph to express genuine interest in the specific role and company.
+2. **Alignment**: Clearly articulate how the candidate's skills, experiences, and achievements directly align with the job requirements and company culture mentioned in the job description.
+3. **Value Proposition**: Emphasize the unique value the candidate can bring to the employer and how they can contribute to the company's success. Focus on quantifiable achievements from the candidate's resume that are most relevant to the value. Elaborate on these achievements to provide context and demonstrate impact. Use a bulleted list for easy readability.
+4. **Conciseness**: Keep the entire letter brief (250-300 words maximum) and to the point. Avoid repeating information verbatim from the resume.
+5. **Professional Tone**: Maintain a professional and enthusiastic tone throughout the letter.
+6. **Call to Action**: Conclude with a clear call to action, expressing eagerness for an interview.
+7. **No Placeholders**: Do not include any placeholder brackets like [Hiring Manager Name] or [Company Address].
+</instructions>
 
 <job_description>
 {job_description}
@@ -162,12 +229,4 @@ create a compelling, concise cover letter that aligns my resume/work information
 <my_work_information>
 {adapted_resume}
 </my_work_information>
-
-<guidelines>
-- Highlight my unique qualifications for this specific role and company culture in a concise bulleted list for easy readability.
-- Focus on the value I can bring to the employer, including 1-2 specific examples of relevant achievements.
-- Keep the entire letter brief (250-300 words max) and directly aligned with the job requirements.
-- Do not repeat information verbatim from my resume. Instead, elaborate on or provide context for key points.
-- No Placeholder Brackets: Do not include any placeholder brackets like [Hiring Manager Name] or [Company Address].
-</guidelines>
 """

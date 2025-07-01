@@ -38,9 +38,11 @@ async def ingest_job(state: InputState) -> dict:
     Returns:
         Resume: A structured representation of the resume data.
     """
+    logger.info("Starting ingest_job function.")
     llm = get_llm(size='small').with_structured_output(JobDescription)
     prompt = INGEST_JOB_PROMPT.format(job_description_raw=state.job_desc_raw)
     job = await llm.ainvoke(prompt)
+    logger.info("Finished ingest_job function.")
     return {'job': job}
 
 async def ingest_resume(state: InputState) -> dict:
@@ -52,15 +54,24 @@ async def ingest_resume(state: InputState) -> dict:
     Returns:
         Resume: A structured representation of the resume data.
     """
+    logger.info("Starting ingest_resume function.")
     llm = get_llm(size='small').with_structured_output(Resume)
     prompt = INGEST_RESUME_PROMPT.format(resume_raw=state.resume_raw)
     resume = await llm.ainvoke(prompt)
+    logger.info("Finished ingest_resume function.")
     return {'resume': resume}
 
 async def adapt_resume(state: FullState) -> dict:
     """
     Adapt the resume to the job description.
+
+    Args:
+        state (FullState): The state containing the job description and resume.
+    
+    Returns:
+        dict: A dictionary containing the adapted resume.
     """
+    logger.info("Starting adapt_resume function.")
     system_prompt = ADAPT_SYSTEM_PROMPT.format(job_description=state.job)
 
     sections_to_adapt = [
@@ -97,11 +108,19 @@ async def adapt_resume(state: FullState) -> dict:
 async def generate_cover_letter(state: FullState) -> dict:
     """
     Generate a custom cover letter based on the job description and adapted resume.
+    
+    Args:
+        state (FullState): The state containing the job description and adapted resume.
+
+    Returns:
+        dict: A dictionary containing the generated cover letter.
     """
+    logger.info("Starting generate_cover_letter function.")
     llm = get_llm(size='small').with_structured_output(CoverLetter)
     prompt = COVER_LETTER_PROMPT.format(
         job_description=state.job,
         adapted_resume=state.resume_out
     )
     cover_letter = await llm.ainvoke(prompt)
+    logger.info("Finished generate_cover_letter function.")
     return {'cover_letter': cover_letter}

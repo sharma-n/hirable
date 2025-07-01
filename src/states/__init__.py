@@ -5,20 +5,14 @@ from pydantic import BaseModel, Field, model_validator, computed_field
 from src.states.job_desc import JobDescription
 from src.states.resume import Resume
 from src.states.cover_letter import CoverLetter
-from src.utils.parse import parse_url, parse_file
+from src.utils.parse import parse_url
 
 logger = logging.getLogger(__name__)
 
 class InputState(BaseModel):
     job_url: Optional[str] = Field(default=None, description="The URL to the job posting.")
     job_desc_raw: Optional[str] = Field(default=None, description="The raw text of the job description.")
-    resume_path : str = Field(description="The path to the input resume file.")
-
-    @computed_field
-    @property
-    def resume_raw(self) -> str:
-        logger.info(f"Reading resume from {self.resume_path}")
-        return parse_file(self.resume_path)
+    resume_raw: str = Field(description="The raw text of the resume.")
 
     @model_validator(mode='after')
     def validate_input(self):

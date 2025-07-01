@@ -19,3 +19,5 @@ if __name__ == "__main__":
     print(output['job'])
     print("--- Adapted Resume ---")
     print(output['resume_out'])
+    print("--- Cover Letter ---")
+    print(output['cover_letter'])

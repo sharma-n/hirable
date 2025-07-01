@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator, computed_field
 
 from src.states.job_desc import JobDescription
 from src.states.resume import Resume
+from src.states.cover_letter import CoverLetter
 from src.utils.parse import parse_url, parse_file
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class OutputState(BaseModel):
     resume: Resume = Field(description="The original parsed resume object.")
     job: JobDescription = Field(description="The parsed job description object.")
     resume_out: Optional[Resume] = Field(default=None, description="The adapted resume object.")
+    cover_letter: Optional[CoverLetter] = Field(default=None, description="The generated cover letter.")
 
 class FullState(InputState, OutputState):
     pass

@@ -7,11 +7,11 @@ An LLM app used to make tailor-made resume and CV for any specific job opportuni
 1.  Install the dependencies:
 
     ```bash
-    pip install -e .
+    uv sync
     ```
 
 2.  Run the main script:
 
     ```bash
-    python main.py
+    uv run main.py
     ```

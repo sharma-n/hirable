@@ -143,3 +143,26 @@ This is the current skills section from the candidate's resume:
 {skills}
 </current_skills>
 """
+
+COVER_LETTER_PROMPT = """
+You are a highly experienced career advisor. Your task is to write a compelling cover letter for a job applicant.
+The cover letter should be tailored to the specific job description and highlight how the applicant's skills and experiences, as detailed in their adapted resume, make them an ideal candidate.
+
+<guidelines>
+To ensure that you perform your best, please keep in mind these guidelines:
+1.  **Professional Tone**: Maintain a formal and professional tone throughout the letter.
+2.  **Conciseness**: Keep the letter concise, ideally one page.
+3.  **Highlight Key Matches**: Directly reference skills and experiences from the adapted resume that align with the job description.
+4.  **Quantify Achievements**: Where possible, include quantifiable achievements from the resume to demonstrate impact.
+5.  **Call to Action**: Conclude with a clear call to action, expressing enthusiasm for an interview.
+6.  **No Placeholder Brackets**: Do not include any placeholder brackets like [Hiring Manager Name] or [Company Address].
+</guidelines>
+
+<job_description>
+{job_description}
+</job_description>
+
+<adapted_resume>
+{adapted_resume}
+</adapted_resume>
+"""

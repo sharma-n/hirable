@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from src.states import FullState, InputState
+from src.states import FullState, InputState, CoverLetter
 from src.states.job_desc import JobDescription
 from src.states.resume import (
     Resume,
@@ -22,7 +22,8 @@ from src.prompts import (
     ADAPT_EDUCATION_PROMPT,
     ADAPT_PROJECTS_PROMPT,
     ADAPT_PUBLICATIONS_PROMPT,
-    ADAPT_SKILLS_PROMPT
+    ADAPT_SKILLS_PROMPT,
+    COVER_LETTER_PROMPT
 )
 
 logger = logging.getLogger(__name__)
@@ -92,3 +93,15 @@ async def adapt_resume(state: FullState) -> dict:
     )
 
     return {'resume_out': resume_out}
+
+async def generate_cover_letter(state: FullState) -> dict:
+    """
+    Generate a custom cover letter based on the job description and adapted resume.
+    """
+    llm = get_llm(size='small').with_structured_output(CoverLetter)
+    prompt = COVER_LETTER_PROMPT.format(
+        job_description=state.job,
+        adapted_resume=state.resume_out
+    )
+    cover_letter = await llm.ainvoke(prompt)
+    return {'cover_letter': cover_letter}

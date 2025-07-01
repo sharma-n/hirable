@@ -31,8 +31,9 @@ class InputState(BaseModel):
         return self
     
 class OutputState(BaseModel):
-    resume: Resume = Field(description="The processed resume object.")
+    resume: Resume = Field(description="The original parsed resume object.")
     job: JobDescription = Field(description="The parsed job description object.")
+    resume_out: Optional[Resume] = Field(default=None, description="The adapted resume object.")
 
 class FullState(InputState, OutputState):
     pass

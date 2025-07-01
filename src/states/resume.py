@@ -1,8 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from src.utils.parse import parse_file
-
 class BasicInfo(BaseModel):
     name: str = Field(description="The name of the person.")
     one_liner: Optional[str] = Field(default=None, description="A one-liner description of the person's work or interests.")

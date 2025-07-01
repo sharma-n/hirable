@@ -9,12 +9,12 @@ from src.config import llm_config
 logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=2)
-def get_llm(size: Literal['small', 'medium']):
+def get_llm(size: Literal['small', 'large']):
     '''
     Returns a pre-trained LLM based on the specified size.
 
     Args:
-        size (Literal['small', 'medium']): The size of the LLM to return. Can be either 'small' or 'medium'.
+        size (Literal['small', 'large']): The size of the LLM to return. Can be either 'small' or 'large'.
     '''
     model = llm_config.small if size == 'small' else llm_config.large
     logger.info(f"Loading {model} from {llm_config.provider}.")

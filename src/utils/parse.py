@@ -47,7 +47,7 @@ def parse_file(file_input) -> str:
         doc = Document(file_obj)
         for para in doc.paragraphs:
             text += para.text + '\n'
-    elif file_extension == '.txt':
+    elif file_extension in ['.txt', '.tex']:
         # If file_obj is already opened in binary mode, decode
         text = file_obj.read().decode('utf-8')
     else:

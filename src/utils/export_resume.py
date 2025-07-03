@@ -1,13 +1,21 @@
+from pathlib import Path
 import yaml
 from src.states.resume import Resume 
 from typing import Dict, Any, List
 import logging
+import tempfile
+import subprocess
+import os
 
 logger = logging.getLogger(__name__)
 
-def export_to_yaml(resume: Resume, file_path: str):
+def export_to_pdf(resume: Resume, rendercv_config: dict = None):
     """
-    Exports a Resume object to a YAML file following the RenderCV structure.
+    Exports a Resume object to a PDF file following the RenderCV structure.
+
+    Args:
+        resume (Resume): An object containing the processed resume data
+        rendercv_design (dict): rendercv design and settings. If None, uses default design.
     """
     cv_content: Dict[str, Any] = {}
 
@@ -90,8 +98,6 @@ def export_to_yaml(resume: Resume, file_path: str):
         project_entries = []
         for proj in resume.projects.projects:
             highlights = proj.highlights if proj.highlights else []
-            if proj.technologies:
-                highlights.append(f"Technologies: {', '.join(proj.technologies)}")
             
             entry = {
                 "name": f"[{proj.title}]({proj.link})" if proj.link else proj.title,
@@ -155,20 +161,19 @@ def export_to_yaml(resume: Resume, file_path: str):
     if sections:
         cv_content["sections"] = sections
 
-    design_content = {
-        'theme': 'sb2nov',
-        'entry_types': {
-            'publication_entry': {      # want to slim down publication entry a little bit
-                'main_column_first_row_template': '**TITLE**',
-                'main_column_second_row_template': 'AUTHORS, URL (JOURNAL)',
-                'main_column_second_row_without_journal_template': 'AUTHORS, URL',
-                'main_column_second_row_without_url_template': 'AUTHORS (JOURNAL)',
-                'date_and_location_column_template': 'DATE'
-            }
-        }
-    }
-    full_yaml_content = {"cv": cv_content, "design": design_content}
+    rendercv_config.update({"cv": cv_content})
+    # Create a temporary YAML file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_file:
+        yaml.dump(rendercv_config, tmp_file, sort_keys=False, default_flow_style=False)
+        tmp_yaml_path = tmp_file.name
 
-    with open(file_path, "w") as f:
-        yaml.dump(full_yaml_content, f, sort_keys=False, default_flow_style=False)
-
+    try:
+        # Run the rendercv command
+        subprocess.run(
+            ["rendercv", "render", tmp_yaml_path],
+            check=True
+        )
+    finally:
+        # Clean up the temporary file
+        os.remove(tmp_yaml_path)
+    return

@@ -1,0 +1,22 @@
+design:
+  theme: sb2nov 
+  page:
+    size: a4
+  entry_types:
+    publication_entry:
+      main_column_first_row_template: '**TITLE**'
+      main_column_second_row_template: AUTHORS, URL (JOURNAL)
+      main_column_second_row_without_journal_template: AUTHORS, URL
+      main_column_second_row_without_url_template: AUTHORS, JOURNAL
+      date_and_location_column_template: DATE
+
+rendercv_settings:
+  render_command:
+    output_folder_name: data/rendercv_output
+    pdf_path: NAME_IN_SNAKE_CASE_CV.pdf 
+    typst_path: NAME_IN_LOWER_SNAKE_CASE_cv.typ
+    html_path: NAME_IN_KEBAB_CASE_CV.html
+    markdown_path: NAME.md
+    dont_generate_html: true 
+    dont_generate_markdown: true 
+    dont_generate_png: true 

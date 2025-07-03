@@ -44,7 +44,7 @@ else:
 
 # Resume Upload
 st.header("2. Upload Your Resume")
-resume_file = st.file_uploader("Upload Resume (PDF, DOCX, TXT, YAML)", type=["pdf", "docx", "txt", "yaml"])
+resume_file = st.file_uploader("Upload Resume (PDF, DOCX, TXT, TEX, YAML)", type=["pdf", "docx", "txt", "tex", "yaml"])
 
 # Process Button
 st.header("3. Generate Tailored Documents")

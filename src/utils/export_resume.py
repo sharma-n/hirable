@@ -13,10 +13,10 @@ def export_to_yaml(resume: Resume, file_path: str):
 
     # Basic Info
     cv_content["name"] = resume.basic_info.name
-    if resume.basic_info.one_liner:
-        cv_content["summary"] = resume.basic_info.one_liner # Mapping one_liner to summary in RenderCV
     cv_content["email"] = resume.basic_info.email
     cv_content["phone"] = resume.basic_info.phone_number
+    if resume.basic_info.residence_status:
+        cv_content["location"] = resume.basic_info.residence_status
     
     social_networks = []
     if resume.basic_info.links:
@@ -43,6 +43,9 @@ def export_to_yaml(resume: Resume, file_path: str):
     # Sections
     sections: Dict[str, List[Dict[str, Any]]] = {}
 
+    # Summary
+    sections[''] = [resume.basic_info.summary]
+
     # Experience
     if resume.experience and resume.experience.experience:
         experience_entries = []
@@ -50,13 +53,12 @@ def export_to_yaml(resume: Resume, file_path: str):
             entry = {
                 "company": exp.company,
                 "position": exp.title,
-                "location": exp.location,
                 "start_date": exp.start,
                 "end_date": exp.end if exp.end != "Present" else "present",
                 "highlights": exp.descriptions,
             }
-            if exp.other_info:
-                entry["summary"] = exp.other_info
+            if exp.location: entry["location"] = exp.location
+            if exp.other_info: entry["summary"] = exp.other_info
             experience_entries.append(entry)
         sections["Experience"] = experience_entries
 
@@ -104,21 +106,43 @@ def export_to_yaml(resume: Resume, file_path: str):
         publication_entries = []
         for pub in resume.publications.publications:
             entry = {
-                "title": f"[{pub.title}]({pub.link})" if pub.link else pub.title,
+                "title": pub.title,
                 "authors": pub.authors,
+                "date": pub.date,
+                "journal": pub.journal_name
             }
-            if pub.description:
-                entry["summary"] = pub.description
+            if pub.link: entry['url'] = pub.link
+            if pub.description: entry["summary"] = pub.description
             publication_entries.append(entry)
         sections["Publications"] = publication_entries
 
     # Skills
     if resume.skills and resume.skills.skills:
-        sections["Skills"] = [{"bullet": skill} for skill in resume.skills.skills]
+        skill_entries = []
+        for skill in resume.skills.skills:
+            if ':' in skill:
+                label, details = skill.split(':', 1)
+                skill_entries.append({
+                    "label": label.strip(),
+                    "details": details.strip()
+                })
+            else:
+                skill_entries.append(skill.strip())
+        sections["Skills"] = skill_entries
 
     # Awards
     if resume.awards:
-        sections["Awards"] = [{"bullet": award} for award in resume.awards]
+        award_entries = []
+        for award in resume.awards:
+            if ':' in award:
+                label, details = award.split(':', 1)
+                award_entries.append({
+                    "label": label.strip(),
+                    "details": details.strip()
+                })
+            else:
+                award_entries.append(award.strip())
+        sections["Awards"] = award_entries
 
     # Certifications
     if resume.certifications:
@@ -128,15 +152,20 @@ def export_to_yaml(resume: Resume, file_path: str):
     if resume.languages:
         sections["Languages"] = [{"bullet": lang} for lang in resume.languages]
 
-    # Other Info
-    if resume.other_info:
-        sections["Other Information"] = [{"text": resume.other_info}]
-
     if sections:
         cv_content["sections"] = sections
 
     design_content = {
-        'theme': 'sb2nov'
+        'theme': 'sb2nov',
+        'entry_types': {
+            'publication_entry': {      # want to slim down publication entry a little bit
+                'main_column_first_row_template': '**TITLE**',
+                'main_column_second_row_template': 'AUTHORS, URL (JOURNAL)',
+                'main_column_second_row_without_journal_template': 'AUTHORS, URL',
+                'main_column_second_row_without_url_template': 'AUTHORS (JOURNAL)',
+                'date_and_location_column_template': 'DATE'
+            }
+        }
     }
     full_yaml_content = {"cv": cv_content, "design": design_content}
 

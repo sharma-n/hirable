@@ -84,10 +84,9 @@ Rewrite the basic information section of the resume to be more impactful and tai
 </task>
 
 <instructions>
-1. **One-liner**: Craft a powerful, concise one-liner (professional headline) that summarizes the candidate's professional identity and aligns directly with the target role and industry.
-2. **Summary**: Develop a 2-3 sentence narrative summary that highlights the candidate's most relevant achievements, skills, and career goals, directly addressing the employer's needs as stated in the job description.
-3. **Keywords**: Naturally integrate keywords from the job description into both the one-liner and summary to optimize for Applicant Tracking Systems (ATS).
-4. **Impact**: Ensure the summary emphasizes the candidate's potential contributions and value to the prospective employer.
+1. **Summary**: Develop a 2-3 sentence narrative summary that highlights the candidate's most relevant achievements, skills, and career goals, directly addressing the employer's needs as stated in the job description. Keep it to less than 35 words.
+2. **Keywords**: Naturally integrate keywords from the job description into the summary to optimize for Applicant Tracking Systems (ATS).
+3. **Impact**: Ensure the summary emphasizes the candidate's potential contributions and value to the prospective employer.
 </instructions>
 
 <current_basic_info>
@@ -96,9 +95,6 @@ This is the current basic information section from the candidate's resume:
 </current_basic_info>
 
 <example_of_good_resume_text>
-**One-liner Example:**
-"Highly motivated Software Engineer with expertise in scalable backend systems and cloud infrastructure."
-
 **Summary Example:**
 "Results-oriented Software Engineer with 5+ years of experience in developing and deploying robust web applications. Proven ability to lead cross-functional teams and deliver high-quality code, consistently exceeding project goals. Seeking to leverage strong problem-solving skills and technical acumen to contribute to innovative solutions at [Company Name]."
 </example_of_good_resume_text>
@@ -184,7 +180,7 @@ Curate the skills section to mirror the requirements of the job description.
 
 <instructions>
 1. **Relevance**: Prioritize and include skills that are explicitly mentioned or strongly implied in the job description.
-2. **Categorization**: Group skills into logical and relevant categories (e.g., Programming Languages, Cloud Platforms, Tools, Soft Skills) for readability.
+2. **Categorization**: Group skills into logical and relevant categories (e.g., Programming Languages, Cloud Platforms, Tools, Soft Skills) for readability. Have a maximum of 3-4 groups.
 3. **Specificity**: Be specific with skill names (e.g., "Python" instead of "Programming").
 4. **Removal**: Remove any skills that are outdated, irrelevant to the target role, or not present in the job description.
 5. **Order**: Within categories, consider ordering skills by proficiency or relevance to the job.
@@ -196,15 +192,11 @@ This is the current skills section from the candidate's resume:
 </current_skills>
 
 <example_of_good_resume_text>
-**Technical Skills:**
 - Programming Languages: Python, Java, C++, JavaScript, Go
 - Cloud Platforms: AWS (EC2, S3, Lambda), Azure, Google Cloud Platform
 - Databases: PostgreSQL, MongoDB, MySQL, Redis
-- Web Frameworks: Django, Flask, React, Angular, Node.js
 - Tools & Technologies: Docker, Kubernetes, Git, Jenkins, RESTful APIs, Microservices
-
-**Soft Skills:**
-- Problem-Solving, Communication, Teamwork, Leadership, Agile Methodologies, Project Management
+- Soft Skills: Problem-Solving, Communication, Teamwork, Leadership, Agile Methodologies, Project Management
 </example_of_good_resume_text>
 """
 

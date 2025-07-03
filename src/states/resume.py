@@ -3,16 +3,14 @@ from pydantic import BaseModel, Field
 
 class BasicInfo(BaseModel):
     name: str = Field(description="The name of the person.")
-    one_liner: Optional[str] = Field(default=None, description="A one-liner description of the person's work or interests.")
     email: str = Field(description="The email address of the person. For example, id@provider.com")
     phone_number: str = Field(description="The phone number of the person. Include the country code if provided.")
     summary: Optional[str] = Field(default=None, description="A brief summary of the person's work or interests.")
-    links: Optional[list[str]] = Field(default=None, description="A list containing links to social media profiles. For example, ['LinkedIn: https://www.linkedin.com/in/example', 'GitHub: https://github.com/example', 'Medium: https://medium.com/example']")
+    links: Optional[list[str]] = Field(default=None, description="A list containing links to social media profiles. Each link should include the name of the platform and the URL separated by a colon(:). For example, ['LinkedIn: https://www.linkedin.com/in/example', 'GitHub: https://github.com/example', 'Medium: https://medium.com/example']")
     residence_status: Optional[str] = Field(default=None, description="The residence status of the person. This can be nationality, visa status etc. For example, 'U.S. Citizen', 'U.S. Green Card', 'Permanent Resident'")
 
     def __str__(self):
         return f"## Basic Information\n- Name: {self.name}\n"\
-            + ("" if self.one_liner is None else f"- One liner description: {self.one_liner}\n")\
             + f"- Email: {self.email}\n"\
             + f"- Phone number: {self.phone_number}\n"\
             + ("" if self.summary is None else f"- Summary: {self.summary}\n")\
@@ -23,9 +21,9 @@ class Experiences(BaseModel):
     class Experience(BaseModel):
         title: str = Field(description="The title of the job role.")
         company: str = Field(description="The name of the company.")
-        location: str = Field(description="The location of the company.")
         start: str = Field(description="The start date of the job, in YYYY-MM-DD or YYYY-MM format, for example 2023-05.")
         end: str = Field(description="The end date of the job, in YYYY-MM-DD or YYYY-MM format, for example 2023-05. If still in current position, reply with 'present'")
+        location: Optional[str] = Field(description="The location of the company.")
         descriptions: list[str] = Field(description="A list of points describing the responsibilities and achievements while in the job role.")
         other_info: Optional[str] = Field(description="Any additional information about the experience, such as any relevant skills or accomplishments.")
 
@@ -40,8 +38,8 @@ class Experiences(BaseModel):
         return '\n'.join([str(e) for e in self.experience]) + "\n"
 class Educations(BaseModel):
     class Education(BaseModel):
-        degree: str = Field(description="The degree obtained.")
-        area: str = Field(description="The area of study, for example Electrical Engineering")
+        degree: str = Field(description="The degree obtained, for example B.Eng., M.Eng etc. Does not include the field of study.")
+        area: str = Field(description="The area or field of study, for example Electrical Engineering, Economics, Medicine etc.")
         school: str = Field(description="The name of the institution where the degree was obtained.")
         start: str = Field(description="The start date of the education, in YYYY-MM-DD or YYYY-MM format, for example 2023-05.")
         end: str = Field(description="The end date of the education, in YYYY-MM-DD or YYYY-MM format, for example 2025-05. If still undergoing studies, reply with 'present'")
@@ -86,11 +84,12 @@ class Publications(BaseModel):
         title: str = Field(description="The title of the publication.")
         authors: list[str] = Field(description="A list of authors of the publication.")
         date: str = Field(description="The date of the publication, in YYYY-MM-DD or YYYY-MM format.")
+        journal_name: str = Field(description='The name of the journal / conference where the publication was done.')
         description: Optional[str] = Field(default=None, description="A brief description of the publication.")
         link: Optional[str] = Field(default=None, description="A link to the publication, if available.")
         
         def __str__(self):
-            return f"- {self.title} by {', '.join(self.authors)} (published on {self.date})" + ("" if self.description is None else f": {self.description}.") + ("" if self.link is None else f" Link: {self.link}") + "\n"
+            return f"- {self.title} by {', '.join(self.authors)} (published on {self.date} at {self.journal_name})" + ("" if self.description is None else f": {self.description}.") + ("" if self.link is None else f" Link: {self.link}") + "\n"
 
     publications: list[Publication] = Field(description="Publications written by the individual.")
 
@@ -98,7 +97,7 @@ class Publications(BaseModel):
         return '\n'.join([str(p) for p in self.publications]) + "\n"
 
 class Skills(BaseModel):
-    skills: list[str] = Field(description="A list of grouped skills that the resume mentions. If groups are not provided for the skills, then group them based on types (e.g., programming, design, etc.). Each element of the list should be in the form of 'Group: comma separated skills in the group'")
+    skills: list[str] = Field(description="A list of grouped skills that the resume mentions. If groups are not provided for the skills, then group them based on types (e.g., programming, design, etc.). Each element of the list should be in the form of 'Group: comma separated skills in the group'. Make sure you extract less than 4 groups.")
 
     def __str__(self):
         return '- ' + '\n- '.join(self.skills) + "\n"
@@ -109,9 +108,9 @@ class Resume(BaseModel):
     education: Educations = Field(description="A list of educational backgrounds.")
     projects: Projects = Field(description="A list of projects.")
     publications: Optional[Publications] = Field(default=None, description="A list of publications.")
-    awards: Optional[list[str]] = Field(default=None, description="Awards received by the individual. Each award should be listed with its description if provided..")
+    awards: Optional[list[str]] = Field(default=None, description="Awards received by the individual. Each award should be listed as 'Name of Award: Description'")
     certifications: Optional[list[str]] = Field(default=None, description="Certifications obtained by the individual. Each certification should be listed with its description if provided.")
-    languages: Optional[list[str]] = Field(default=None, description="Languages spoken by the individual. Each language should be listed the proficiency level if provided.")
+    languages: Optional[list[str]] = Field(default=None, description="Languages spoken by the individual. Should be grouped by proficiency level. If no proficiency is provided, assume Fluent. Example response is ['Fluent: English, Spanish','Intermediate: Japanese']")
     skills: Skills = Field(description="A list of skills.")
     other_info: Optional[str] = Field(default=None, description="Additional information from the resume that is not captured in the previous fields. You should group similar information together under a heading and the write each piece of information as a bullet point.")
 

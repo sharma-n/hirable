@@ -2,7 +2,7 @@ import asyncio
 import yaml
 from src.graph import get_graph
 from src.states import InputState
-from src.utils.utils import setup_logging
+from src.utils import setup_logging
 from src.utils.parse import parse_file
 from src.utils.export_resume import export_to_yaml
 

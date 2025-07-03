@@ -1,4 +1,3 @@
-from pathlib import Path
 import yaml
 from src.states.resume import Resume 
 from typing import Dict, Any, List
@@ -9,7 +8,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def export_to_pdf(resume: Resume, rendercv_config: dict = None):
+def export_resume_to_pdf(resume: Resume, rendercv_config: dict = None):
     """
     Exports a Resume object to a PDF file following the RenderCV structure.
 

@@ -10,10 +10,10 @@ dependencies = [
     "langchain>=0.3.25",
     "langchain-openai>=0.3.16",
     "langgraph>=0.4.1",
+    "markdown-pdf>=1.7",
     "mcp[cli]>=1.7.1",
     "pydantic>=2.11.4",
     "python-docx>=1.1.2",
-    "rendercv[full]",
     "streamlit>=1.46.1",
 ]
 

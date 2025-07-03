@@ -5,6 +5,7 @@ import re
 import os
 import base64
 import yaml
+from markdown_pdf import MarkdownPdf, Section
 
 from src.graph import get_graph
 from src.states import InputState
@@ -21,7 +22,7 @@ st.write("Upload your resume and paste a job description to get a tailored resum
 
 # Job Description Input
 st.header("1. Job Description")
-job_desc_input_method = st.radio("Choose Job Description Input Method", ("URL", "Text"), horizontal=True)
+job_desc_input_method = st.radio("Choose Job Description Input Method", ("URL", "Text"), horizontal=True, label_visibility='collapsed')
 
 job_description_url = None
 job_description_input = None
@@ -94,9 +95,21 @@ if st.button("Generate Tailored Resume & Cover Letter"):
             else:
                 st.error(f"Could not find the generated PDF at {pdf_path}")
 
-
+            # Export Cover Letter to PDF
             st.subheader("Generated Cover Letter")
-            st.markdown(output['cover_letter'])
+            cover_letter_pdf = MarkdownPdf(toc_level=2)
+            cover_letter_pdf.add_section(Section(str(output['cover_letter'])))
+            cover_letter_pdf_path = os.path.join("data", "rendercv_output", "cover_letter.pdf")
+            cover_letter_pdf.save(cover_letter_pdf_path)
+
+            if os.path.exists(cover_letter_pdf_path):
+                with open(cover_letter_pdf_path, "rb") as f:
+                    base64_cover_letter_pdf = base64.b64encode(f.read()).decode('utf-8')
+                cover_letter_pdf_display = f'<iframe src="data:application/pdf;base64,{base64_cover_letter_pdf}" width="100%" height="1000" type="application/pdf"></iframe>'
+                st.markdown(cover_letter_pdf_display, unsafe_allow_html=True)
+            else:
+                st.error(f"Could not find the generated PDF at {cover_letter_pdf_path}")
+
 
             # Add download button for the parsed resume (output['resume'])
             st.download_button(
@@ -105,9 +118,3 @@ if st.button("Generate Tailored Resume & Cover Letter"):
                 file_name="parsed_resume.yaml",
             )
 
-            # Add download button for the cover letter
-            st.download_button(
-                label="Download Cover Letter (Markdown)",
-                data=str(output['cover_letter']),
-                file_name="cover_letter.md",
-            )

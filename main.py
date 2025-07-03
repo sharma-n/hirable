@@ -4,36 +4,30 @@ from src.graph import get_graph
 from src.states import InputState
 from src.utils.utils import setup_logging
 from src.utils.parse import parse_file
+from src.utils.export_resume import export_to_yaml
 
 setup_logging()
 
 if __name__ == "__main__":
+    URL = 'https://www.metacareers.com/jobs/594161082740454/'
+    USE_YAML = False
+    RESUME_FILE = 'data/Resume_example.pdf'
+    INPUT_RESUME_YAML = 'data/parsed_resume.yaml'
+    OUTPUT_RESUME_YAML = 'data/output_resume.yaml'
+
     graph = get_graph()
+    input_params = {
+        'job_url': URL,
+    }
+    if USE_YAML:
+        input_params['resume_yaml'] = INPUT_RESUME_YAML
+    else:
+        input_params['resume_raw'] = parse_file(RESUME_FILE)
 
-    # Example 1: Parse resume from raw file and save to YAML
-    print("\n--- Running example 1: Parsing resume from raw file and saving to YAML ---")
-    state_raw_resume = InputState(
-        job_url='https://www.google.com/about/careers/applications/jobs/results/110690555461018310-software-engineer-iii-infrastructure-core',
-        resume_raw=parse_file('data/Resume_example.pdf')
-    )
-    output_raw_resume = asyncio.run(graph.ainvoke(input=state_raw_resume))
-    print("--- Parsed Resume (from raw) ---")
-    print(output_raw_resume['resume'])
-    yaml.safe_dump(output_raw_resume['resume'].model_dump(mode='json'), open('data/Resume_example.yaml', 'w'), indent=2)
-    print("Resume saved to data/Resume_example.yaml")
+    input_state = InputState(**input_params)
+    output_resume = asyncio.run(graph.ainvoke(input=input_state))
 
-    # Example 2: Load resume from YAML
-    # print("\n--- Running example 2: Loading resume from YAML ---")
-    # state_yaml_resume = InputState(
-    #     job_url='https://www.google.com/about/careers/applications/jobs/results/110690555461018310-software-engineer-iii-infrastructure-core',
-    #     resume_yaml = yaml.safe_load(open('data/Resume_example.yaml', 'r'))
-    # )
-    # output_yaml_resume = asyncio.run(graph.ainvoke(input=state_yaml_resume))
-    # print("--- Parsed Resume (from YAML) ---")
-    # print(output_yaml_resume['resume'])
-    # print("--- Parsed Job Description ---")
-    # print(output_yaml_resume['job'])
-    # print("--- Adapted Resume ---")
-    # print(output_yaml_resume['resume_out'])
-    # print("--- Cover Letter ---")
-    # print(output_yaml_resume['cover_letter'])
+    if not USE_YAML:
+        yaml.safe_dump(output_resume['resume'].model_dump(mode='json'), open(INPUT_RESUME_YAML, 'w'), indent=2)
+
+    export_to_yaml(output_resume['resume_out'], OUTPUT_RESUME_YAML)

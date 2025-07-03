@@ -24,8 +24,8 @@ class Experiences(BaseModel):
         title: str = Field(description="The title of the job role.")
         company: str = Field(description="The name of the company.")
         location: str = Field(description="The location of the company.")
-        start: str = Field(description="The start date of the job, in %B %Y format, for example July 2023.")
-        end: str = Field(description="The end date of the job, in %B %Y format, for example July 2023. If still in current position, reply with 'Present'")
+        start: str = Field(description="The start date of the job, in YYYY-MM-DD or YYYY-MM format, for example 2023-05.")
+        end: str = Field(description="The end date of the job, in YYYY-MM-DD or YYYY-MM format, for example 2023-05. If still in current position, reply with 'present'")
         descriptions: list[str] = Field(description="A list of points describing the responsibilities and achievements while in the job role.")
         other_info: Optional[str] = Field(description="Any additional information about the experience, such as any relevant skills or accomplishments.")
 
@@ -41,15 +41,17 @@ class Experiences(BaseModel):
 class Educations(BaseModel):
     class Education(BaseModel):
         degree: str = Field(description="The degree obtained.")
+        area: str = Field(description="The area of study, for example Electrical Engineering")
         school: str = Field(description="The name of the institution where the degree was obtained.")
-        start: str = Field(description="The start date of the education, in %B %Y format, for example July 2023.")
-        end: str = Field(description="The end date of the education, in %B %Y format, for example July 2023. If still undergoing studies, reply with 'Present'")
+        start: str = Field(description="The start date of the education, in YYYY-MM-DD or YYYY-MM format, for example 2023-05.")
+        end: str = Field(description="The end date of the education, in YYYY-MM-DD or YYYY-MM format, for example 2025-05. If still undergoing studies, reply with 'present'")
+        location: str = Field(description='Country where the school is located.')
         gpa: Optional[str] = Field(default=None, description="The grade point average (GPA) obtained during the education, for example '3.8' or '4.0/5.0'.")
         descriptions: list[str] = Field(description="A list of information about the education, such as achievements.")
         courses: Optional[list[str]] = Field(default=None, description="A list of courses taken during the education.")
 
         def __str__(self):
-            return f"### {self.degree} from {self.school} ({self.start} - {self.end})\n- "\
+            return f"### {self.degree} in {self.area} from {self.school}, {self.location} ({self.start} - {self.end})\n- "\
                 + '\n- '.join(self.descriptions) + "\n"\
                 + ("" if self.gpa is None else f"- GPA: {self.gpa}\n")\
                 + ("" if self.courses is None else f"- Courses: {', '.join(self.courses)}\n")
@@ -64,6 +66,7 @@ class Projects(BaseModel):
     class Project(BaseModel):
         title: str = Field(description="The name of the project.")
         description: str = Field(description="A brief description of the project.")
+        highlights: Optional[list[str]] = Field(description="A list of key achievements highlighted about the project.")
         link: Optional[str] = Field(default=None, description="A link to the project, if available. For example, https://github.com/user/project")
         technologies: Optional[list[str]] = Field(default=None, description="A list of technologies used in the project.")
 
@@ -82,11 +85,12 @@ class Publications(BaseModel):
     class Publication(BaseModel):
         title: str = Field(description="The title of the publication.")
         authors: list[str] = Field(description="A list of authors of the publication.")
+        date: str = Field(description="The date of the publication, in YYYY-MM-DD or YYYY-MM format.")
         description: Optional[str] = Field(default=None, description="A brief description of the publication.")
         link: Optional[str] = Field(default=None, description="A link to the publication, if available.")
         
         def __str__(self):
-            return f"- {self.title} by {', '.join(self.authors)}" + ("" if self.description is None else f": {self.description}.") + ("" if self.link is None else f" Link: {self.link}") + "\n"
+            return f"- {self.title} by {', '.join(self.authors)} (published on {self.date})" + ("" if self.description is None else f": {self.description}.") + ("" if self.link is None else f" Link: {self.link}") + "\n"
 
     publications: list[Publication] = Field(description="Publications written by the individual.")
 

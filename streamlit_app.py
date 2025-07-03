@@ -1,14 +1,15 @@
-
 from pathlib import Path
 import streamlit as st
 import asyncio
 import re
-
+import os
+import base64
 import yaml
 
 from src.graph import get_graph
 from src.states import InputState
 from src.utils.parse import parse_file
+from src.utils.export_resume import export_to_pdf
 from src.utils import setup_logging
 
 setup_logging()
@@ -20,7 +21,7 @@ st.write("Upload your resume and paste a job description to get a tailored resum
 
 # Job Description Input
 st.header("1. Job Description")
-job_desc_input_method = st.radio("Choose Job Description Input Method", ("URL", "Text"))
+job_desc_input_method = st.radio("Choose Job Description Input Method", ("URL", "Text"), horizontal=True)
 
 job_description_url = None
 job_description_input = None
@@ -74,8 +75,25 @@ if st.button("Generate Tailored Resume & Cover Letter"):
 
             st.success("Documents processed successfully!")
 
-            st.subheader("Tailored Resume")
-            st.markdown(output['resume_out'])
+            # Export resume to PDF
+            rendercv_config_path = 'src/config/rendercv_config.yaml'
+            rendercv_config = yaml.safe_load(open(rendercv_config_path, 'r'))
+            export_to_pdf(output['resume_out'], rendercv_config)
+
+            # Display PDF
+            st.subheader("Tailored Resume PDF")
+            resume_name = output['resume_out'].basic_info.name
+            pdf_file_name = f"{resume_name.replace(' ', '_')}_CV.pdf"
+            pdf_path = os.path.join("data", "rendercv_output", pdf_file_name)
+
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as f:
+                    base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="1000" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+            else:
+                st.error(f"Could not find the generated PDF at {pdf_path}")
+
 
             st.subheader("Generated Cover Letter")
             st.markdown(output['cover_letter'])
@@ -85,4 +103,11 @@ if st.button("Generate Tailored Resume & Cover Letter"):
                 label="Download Parsed Resume (YAML)",
                 data=yaml.dump(output['resume'].model_dump(), sort_keys=False),
                 file_name="parsed_resume.yaml",
+            )
+
+            # Add download button for the cover letter
+            st.download_button(
+                label="Download Cover Letter (Markdown)",
+                data=str(output['cover_letter']),
+                file_name="cover_letter.md",
             )

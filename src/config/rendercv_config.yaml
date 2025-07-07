@@ -5,10 +5,10 @@ design:
   entry_types:
     publication_entry:
       main_column_first_row_template: '**TITLE**'
-      main_column_second_row_template: AUTHORS, URL (JOURNAL)
-      main_column_second_row_without_journal_template: AUTHORS, URL
-      main_column_second_row_without_url_template: AUTHORS, JOURNAL
-      date_and_location_column_template: DATE
+      main_column_second_row_template: 'AUTHORS, URL (JOURNAL), DATE'
+      main_column_second_row_without_journal_template: 'AUTHORS, URL, DATE'
+      main_column_second_row_without_url_template: 'AUTHORS, JOURNAL, DATE'
+      date_and_location_column_template: ''
 
 rendercv_settings:
   render_command:

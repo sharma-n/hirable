@@ -78,7 +78,7 @@ if st.button("Generate Tailored Resume & Cover Letter"):
             # Export resume to PDF
             rendercv_config_path = 'src/config/rendercv_config.yaml'
             rendercv_config = yaml.safe_load(open(rendercv_config_path, 'r'))
-            export_resume_to_pdf(output['resume_out'], rendercv_config)
+            export_resume_to_pdf(output['resume_out'], keywords=output['job'].keywords, rendercv_config=rendercv_config)
 
             # Display PDF
             st.subheader("Tailored Resume PDF")

@@ -8,12 +8,13 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def export_resume_to_pdf(resume: Resume, rendercv_config: dict = None):
+def export_resume_to_pdf(resume: Resume, keywords: list[str] | None = None, rendercv_config: dict = None):
     """
     Exports a Resume object to a PDF file following the RenderCV structure.
 
     Args:
         resume (Resume): An object containing the processed resume data
+        keywords (list[str] | None, optional): A list of keywords to bold in the resume. Defaults to None.
         rendercv_design (dict): rendercv design and settings. If None, uses default design.
     """
     cv_content: Dict[str, Any] = {}
@@ -111,12 +112,11 @@ def export_resume_to_pdf(resume: Resume, rendercv_config: dict = None):
         publication_entries = []
         for pub in resume.publications.publications:
             entry = {
-                "title": pub.title,
+                "title": f'[{pub.title}]({pub.link})' if pub.link else pub.title,
                 "authors": pub.authors,
                 "date": pub.date,
                 "journal": pub.journal_name
             }
-            if pub.link: entry['url'] = pub.link
             if pub.description: entry["summary"] = pub.description
             publication_entries.append(entry)
         sections["Publications"] = publication_entries
@@ -159,6 +159,11 @@ def export_resume_to_pdf(resume: Resume, rendercv_config: dict = None):
 
     if sections:
         cv_content["sections"] = sections
+
+    if keywords:
+        if "rendercv_settings" not in rendercv_config:
+            rendercv_config["rendercv_settings"] = {}
+        rendercv_config["rendercv_settings"]["bold_keywords"] = keywords
 
     rendercv_config.update({"cv": cv_content})
     # Create a temporary YAML file

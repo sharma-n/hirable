@@ -30,4 +30,4 @@ if __name__ == "__main__":
     if not USE_YAML:
         yaml.safe_dump(output_resume['resume'].model_dump(mode='json'), open(INPUT_RESUME_YAML, 'w'), indent=2)
 
-    export_resume_to_pdf(output_resume['resume_out'], rendercv_config=yaml.safe_load(open(RENDERCV_CONFIG_YAML, 'r')))
+    export_resume_to_pdf(output_resume['resume_out'], keywords=output_resume['job'].keywords, rendercv_config=yaml.safe_load(open(RENDERCV_CONFIG_YAML, 'r')))

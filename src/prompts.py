@@ -68,7 +68,8 @@ To ensure that you perform your best, please keep in mind these guidelines:
 4. **Emphasize the Candidate's Unique Value Proposition**: Focus on the traits that make the candidate stand out from other candidates. This could include unique experiences, achievements, or qualifications that are not mentioned in the job description.
 5. **Use Clear and Concise Language**: Write your using clear and concise language. Avoid jargon or overly complex sentences that may confuse potential employers.
 6. **Optimize for Applicant Tracking Systems (ATS)**: Ensure that your responses are optimized for ATS systems. This includes using industry-specific keywords, avoiding long paragraphs, and ensuring that the response is structured in a way that can be easily parsed by the system.
-7. **Proofread Your Responses**: Ensure that your responses are free of errors and typos. Also, your responses must always be based on the information provided by the candidate. Do not make up any achievements or information that is not provided.
+7. **Be a ruthless editor**: Resumes should be short and to the point. Keep your descriptions short and to the point.
+8. **Proofread Your Responses**: Ensure that your responses are free of errors and typos. Also, your responses must always be based on the information provided by the candidate. Do not make up any achievements or information that is not provided.
 
 </guidelines>
 
@@ -110,7 +111,7 @@ Revise the work experience section to highlight the most relevant accomplishment
 3. **Quantify Achievements**: Wherever possible, quantify accomplishments with numbers, percentages, or specific outcomes (e.g., "Increased sales by 15%" instead of "Responsible for sales").
 4. **STAR Method**: Implicitly use the STAR (Situation, Task, Action, Result) method within bullet points to provide context and demonstrate impact.
 5. **Keywords**: Integrate keywords and terminology from the job description naturally into the descriptions.
-6. **Conciseness**: Keep bullet points concise and impactful, typically 1-2 lines each.
+6. **Conciseness**: Keep bullet points concise and impactful, typically 1-2 lines each. Have a maximum of 4 bullet points.
 7. **Truthfulness**: Ensure all information is accurate and verifiable.
 </instructions>
 
@@ -144,10 +145,10 @@ Tailor the projects section to showcase skills and experience relevant to the jo
 
 <instructions>
 1. **Relevance**: Select projects that are most relevant to the target job description, highlighting skills and technologies mentioned.
-2. **Impact**: For each project, describe the candidate's specific role, contributions, and the impact of their work. Quantify achievements where possible.
+2. **Impact**: For each project, describe the candidate's specific role, contributions, and the impact of their work. Quantify achievements where possible but stay grounded to the details provided.
 3. **Technologies**: Clearly list the technologies, tools, and methodologies used in each project, especially those aligning with the job requirements.
 4. **Links**: If available, include links to live versions, GitHub repositories, or project portfolios.
-5. **Conciseness**: Keep project descriptions concise and focused on outcomes.
+5. **Conciseness**: Keep project descriptions concise (less than 25 words) and focused on outcomes. If a given project does not match the requirements of the job description, remove it completely. Have a maximum of 3 projects.
 </instructions>
 
 <current_projects>
@@ -180,9 +181,9 @@ Curate the skills section to mirror the requirements of the job description.
 
 <instructions>
 1. **Relevance**: Prioritize and include skills that are explicitly mentioned or strongly implied in the job description.
-2. **Categorization**: Group skills into logical and relevant categories (e.g., Programming Languages, Cloud Platforms, Tools, Soft Skills) for readability. Have a maximum of 3-4 groups.
+2. **Categorization**: Group skills into logical and relevant categories for readability. Have a maximum of 3 groups.
 3. **Specificity**: Be specific with skill names (e.g., "Python" instead of "Programming").
-4. **Removal**: Remove any skills that are outdated, irrelevant to the target role, or not present in the job description.
+4. **Brevity**: Remove any skills that are outdated, irrelevant to the target role, or not present in the job description. Have less than 10 skills in each group.
 5. **Order**: Within categories, consider ordering skills by proficiency or relevance to the job.
 </instructions>
 

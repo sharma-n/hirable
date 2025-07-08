@@ -85,11 +85,6 @@ def export_resume_to_pdf(resume: Resume, keywords: list[str] | None = None, rend
             }
             if edu.gpa:
                 entry["summary"] = f"GPA: {edu.gpa}" # Adding GPA to summary
-            if edu.courses:
-                if "summary" in entry:
-                    entry["summary"] += f"\nCourses: {', '.join(edu.courses)}"
-                else:
-                    entry["summary"] = f"Courses: {', '.join(edu.courses)}"
             education_entries.append(entry)
         sections["Education"] = education_entries
 
@@ -121,6 +116,20 @@ def export_resume_to_pdf(resume: Resume, keywords: list[str] | None = None, rend
             publication_entries.append(entry)
         sections["Publications"] = publication_entries
 
+    # Awards
+    if resume.awards:
+        award_entries = []
+        for award in resume.awards:
+            if ':' in award:
+                label, details = award.split(':', 1)
+                award_entries.append({
+                    "label": label.strip(),
+                    "details": details.strip()
+                })
+            else:
+                award_entries.append(award.strip())
+        sections["Awards"] = award_entries
+    
     # Skills
     if resume.skills and resume.skills.skills:
         skill_entries = []
@@ -135,27 +144,20 @@ def export_resume_to_pdf(resume: Resume, keywords: list[str] | None = None, rend
                 skill_entries.append(skill.strip())
         sections["Skills"] = skill_entries
 
-    # Awards
-    if resume.awards:
-        award_entries = []
-        for award in resume.awards:
-            if ':' in award:
-                label, details = award.split(':', 1)
-                award_entries.append({
-                    "label": label.strip(),
-                    "details": details.strip()
-                })
-            else:
-                award_entries.append(award.strip())
-        sections["Awards"] = award_entries
-
     # Certifications
     if resume.certifications:
         sections["Certifications"] = [{"bullet": cert} for cert in resume.certifications]
 
     # Languages
     if resume.languages:
-        sections["Languages"] = [{"bullet": lang} for lang in resume.languages]
+        languages = []
+        for lang in resume.languages:
+            if ':' in lang:
+                proficiency, langs = lang.split(':', 1)
+                languages.append(f'**{proficiency}**: {langs}')
+            else:
+                languages.append(lang)
+        sections["Languages"] = [('\u00A0'*15).join(resume.languages)]
 
     if sections:
         cv_content["sections"] = sections

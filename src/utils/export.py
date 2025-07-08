@@ -177,8 +177,14 @@ def export_resume_to_pdf(resume: Resume, keywords: list[str] | None = None, rend
         # Run the rendercv command
         subprocess.run(
             ["rendercv", "render", tmp_yaml_path],
-            check=True
+            check=True,
+            capture_output=True,
+            text=True
         )
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr or e.stdout
+        logger.error(f"Error during PDF generation with rendercv: {error_message}")
+        raise Exception(f"RenderCV failed to generate PDF. Error: {error_message}") from e
     finally:
         # Clean up the temporary file
         os.remove(tmp_yaml_path)

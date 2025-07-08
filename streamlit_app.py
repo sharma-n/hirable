@@ -8,6 +8,7 @@ import yaml
 
 from src.graph import get_graph
 from src.states import InputState
+from src.states.resume import Resume
 from src.utils.parse import parse_file
 from src.utils.export import export_resume_to_pdf
 from src.utils import setup_logging
@@ -75,14 +76,44 @@ if st.button("Generate Tailored Resume & Cover Letter"):
 
             st.success("Documents processed successfully!")
 
+            # Store the generated resume in the session state
+            st.session_state.resume_out = output['resume_out']
+            st.session_state.job = output['job']
+            st.session_state.cover_letter = output['cover_letter']
+            st.session_state.show_results = True
+            st.rerun()
+
+if 'show_results' in st.session_state and st.session_state.show_results:
+    st.subheader("Tailored Resume (RenderCV YAML)")
+
+    # Initialize the edited_yaml in session_state if it's not there
+    if 'edited_yaml' not in st.session_state:
+        st.session_state.edited_yaml = yaml.dump(st.session_state.resume_out.model_dump(), sort_keys=False, default_flow_style=False)
+
+    with st.expander("View and Edit Resume YAML"):
+        # Display the YAML in a text area for editing
+        st.session_state.edited_yaml = st.text_area(
+            "RenderCV YAML",
+            value=st.session_state.edited_yaml,
+            height=400
+        )
+
+    if st.button("Generate PDF from YAML"):
+        try:
+            # Parse the edited YAML
+            edited_resume_data = yaml.safe_load(st.session_state.edited_yaml)
+            resume_for_pdf = Resume(**edited_resume_data)
+
             # Export resume to PDF
             rendercv_config_path = 'src/config/rendercv_config.yaml'
             rendercv_config = yaml.safe_load(open(rendercv_config_path, 'r'))
-            export_resume_to_pdf(output['resume_out'], keywords=output['job'].keywords, rendercv_config=rendercv_config)
+            
+            with st.spinner("Generating PDF..."):
+                export_resume_to_pdf(resume_for_pdf, keywords=st.session_state.job.keywords, rendercv_config=rendercv_config)
 
             # Display PDF
             st.subheader("Tailored Resume PDF")
-            resume_name = output['resume_out'].basic_info.name
+            resume_name = resume_for_pdf.basic_info.name
             pdf_file_name = f"{resume_name.replace(' ', '_')}_CV.pdf"
             pdf_path = os.path.join("data", "rendercv_output", pdf_file_name)
 
@@ -94,13 +125,18 @@ if st.button("Generate Tailored Resume & Cover Letter"):
             else:
                 st.error(f"Could not find the generated PDF at {pdf_path}")
 
-            # Export Cover Letter to PDF
-            st.subheader("Generated Cover Letter")
-            st.markdown(output['cover_letter'])
+        except (yaml.YAMLError, TypeError, AttributeError) as e:
+            st.error(f"Error parsing YAML or generating PDF: {e}")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
 
-            # Add download button for the parsed resume (output['resume'])
-            st.download_button(
-                label="Download Parsed Resume (YAML)",
-                data=yaml.dump(output['resume'].model_dump(), sort_keys=False),
-                file_name="parsed_resume.yaml",
-            )
+    # Display Cover Letter
+    st.subheader("Generated Cover Letter")
+    st.markdown(st.session_state.cover_letter)
+
+    # Add download button for the parsed resume
+    st.download_button(
+        label="Download Parsed Resume (YAML)",
+        data=st.session_state.edited_yaml,
+        file_name="parsed_resume.yaml",
+    )

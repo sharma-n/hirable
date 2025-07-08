@@ -12,3 +12,5 @@ wheels/
 # Files for dev
 _temp/
 data/
+**.pdf
+**.typ

@@ -1,0 +1,66 @@
+# ---- LLM (consumed by agent_kit sidecar AND backend parsing/generation) ----
+llm_kit:
+  llm:
+    base_url: ${LLM_BASE_URL:-https://api.anthropic.com}
+    model: ${LLM_MODEL:-claude-haiku-4-5-20251001}
+    api_key_env: ANTHROPIC_API_KEY
+    message_format: ${LLM_FORMAT:-anthropic}
+    chat_completions_path: /v1/messages
+    max_tokens: 4096
+  # embed block omitted — episodic memory is OFF; no embedder needed
+
+# ---- agent_kit ----
+agent:
+  max_iterations: 6
+  per_tool_timeout_s: 30.0
+  system_prompt: |
+    You are a job application assistant called hirable.
+    # M4: good_resume.md rulebook will be appended here at bootstrap time.
+
+memory:
+  working:
+    buffer_turns: 12
+    buffer_token_budget: 4000
+    idle_finalize_s: 900
+    ttl_s: 3600
+    sweep_interval_s: 60
+  episodic:
+    enabled: false      # OFF — profile/jobs fetched deterministically via tools (SPEC §6.3)
+  factual:
+    extraction_enabled: false  # OFF — enrichments persist explicitly via record_clarification
+
+context:
+  max_input_tokens: 128000
+  output_reserve_tokens: 4096
+  safety_margin: 1024
+
+stores:
+  session_backend: memory
+  profile_backend: memory
+  vector_backend: memory
+  permission_backend: memory
+
+tools:
+  # Global fallback allowlist — custom hirable tools are added here in M4.
+  default_allowed: []
+
+mcp:
+  servers: []
+
+telemetry:
+  enabled: ${LANGFUSE_ENABLED:-false}
+
+# ---- app (consumed by backend only) ----
+app:
+  agent_base_url: ${AGENT_BASE_URL:-http://agent:8000}
+  internal_base_url: http://backend:8000
+  selectable_models:
+    - display_name: "Haiku"
+      model_id: claude-haiku-4-5-20251001
+    - display_name: "Sonnet"
+      model_id: claude-sonnet-4-6
+    - display_name: "Opus"
+      model_id: claude-opus-4-8
+  tracking:
+    stale_after_days: 15
+    auto_reject_after_days: 30

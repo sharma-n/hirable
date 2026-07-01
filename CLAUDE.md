@@ -160,7 +160,7 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | Milestone | Status | Notes |
 |---|---|---|
 | M0 — skeleton + chat round-trip | **Done** | Chat round-trip verified locally |
-| M1 — auth, sessions, admin | Pending | |
+| M1 — auth, sessions, admin | **Done** | argon2, httpOnly cookie sessions, first-user admin, admin console, full UI redesign (Tailwind v4 + shadcn base-nova, dark mode, app shell) |
 | M2 — resume upload → profile | Pending | |
 | M3 — jobs shortlist | Pending | |
 | M4 — agent tools + clarifying-question loop | Pending | Tool injection API TBD |
@@ -209,3 +209,27 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 - **`memory.working.*`** is the correct nesting — the buffer config is not a flat `memory.*`.
 - agent_kit + llm_kit are **not on PyPI** — git URL install only.
 - agent_kit requires **Python 3.13+** — use `python:3.13-slim` in Dockerfiles.
+
+## Gotchas encountered during M1
+
+- **shadcn `base-nova` style uses `@base-ui/react`, not Radix UI.** No `asChild` prop on
+  Trigger components. Use the `render` prop instead:
+  `<AlertDialogTrigger render={<Button .../>}>content</AlertDialogTrigger>`.
+- **Tailwind v4 has no `tailwind.config.js`** — config lives in CSS via `@import "tailwindcss"`
+  and `@theme` blocks. `shadcn@4.x` requires v4. PostCSS plugin is `@tailwindcss/postcss`.
+- **Session tokens: only the SHA-256 hash is stored in the DB** — the raw token lives only in
+  the httpOnly cookie. `resolve_session(db, raw_token)` hashes before lookup.
+- **WS auth uses the session cookie** — `websocket.cookies.get(COOKIE_NAME)` before
+  `websocket.accept()`; unauthenticated connections close with code 4401.
+- **In-memory SQLite tests need `StaticPool`** — without it each connection sees a different
+  in-memory database, so `create_all` and the session share different data. Use
+  `create_engine("sqlite:///:memory:", poolclass=StaticPool)`.
+- **Frontend route groups:** authenticated pages live in `app/(app)/`, auth pages in
+  `app/(auth)/`. Route protection is done in the server-component group layouts via
+  `cookies()` from `next/headers` — no `middleware.ts`.
+- **Do not use `frontend/middleware.ts` (deprecated in Next.js 16).** Use `cookies()` from
+  `next/headers` inside async server-component layouts: `(app)/layout.tsx` redirects to
+  `/login` if the `hirable_session` cookie is absent; `(auth)/layout.tsx` redirects to
+  `/chat` if it is present. This is the modern, non-deprecated pattern — it runs in the
+  Node.js runtime (not the Edge runtime), has full access to the cookie jar, and does not
+  require any matcher config.

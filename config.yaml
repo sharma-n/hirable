@@ -61,6 +61,9 @@ app:
       model_id: claude-sonnet-4-6
     - display_name: "Opus"
       model_id: claude-opus-4-8
+  auth:
+    session_ttl_days: 14
+    cookie_secure: ${COOKIE_SECURE:-false}  # set to true behind HTTPS in prod
   tracking:
     stale_after_days: 15
     auto_reject_after_days: 30

@@ -1,4 +1,12 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
+import { ThemeProvider } from "next-themes";
+
+import { Toaster } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
+import "./globals.css";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "hirable",
@@ -7,9 +15,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body style={{ fontFamily: "system-ui, sans-serif", margin: 0, padding: 0 }}>
-        {children}
+    <html lang="en" className={cn(geist.variable)} suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

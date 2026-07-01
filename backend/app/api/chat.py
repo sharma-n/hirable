@@ -6,16 +6,29 @@ import os
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.auth.sessions import COOKIE_NAME, resolve_session
 from app.config import agent_base_url
+from app.db.engine import SessionLocal
 
 router = APIRouter()
-
-_M0_USER_ID = "m0-placeholder"  # replaced by session user_id in M1
 
 
 @router.websocket("/api/chat/ws/{conversation_id}")
 async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
-    """Proxy browser WS ↔ agent_kit sidecar WS, injecting user_id + shared secret."""
+    """Proxy browser WS ↔ agent_kit sidecar WS, injecting trusted user_id + shared secret."""
+    # Resolve session before accepting the connection
+    db = SessionLocal()
+    try:
+        token = websocket.cookies.get(COOKIE_NAME)
+        user = resolve_session(db, token) if token else None
+    finally:
+        db.close()
+
+    if user is None:
+        await websocket.close(code=4401)
+        return
+
+    user_id = user.id
     await websocket.accept()
 
     secret = os.environ.get("AGENT_INTERNAL_SECRET", "")
@@ -24,6 +37,8 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
 
     try:
         async with websockets.connect(upstream_url, additional_headers=headers) as upstream:
+            import asyncio
+
             async def browser_to_agent() -> None:
                 while True:
                     raw = await websocket.receive_text()
@@ -31,15 +46,14 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
                         payload = json.loads(raw)
                     except json.JSONDecodeError:
                         payload = {"message": raw}
-                    # Inject the trusted user_id (never trust client-supplied value)
-                    payload["user_id"] = _M0_USER_ID
+                    # Always overwrite with the server-derived user_id — never trust the client
+                    payload["user_id"] = user_id
                     await upstream.send(json.dumps(payload))
 
             async def agent_to_browser() -> None:
                 async for frame in upstream:
                     await websocket.send_text(frame)
 
-            import asyncio
             done, pending = await asyncio.wait(
                 [
                     asyncio.create_task(browser_to_agent()),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import os
 
@@ -37,7 +39,6 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
 
     try:
         async with websockets.connect(upstream_url, additional_headers=headers) as upstream:
-            import asyncio
 
             async def browser_to_agent() -> None:
                 while True:
@@ -63,6 +64,16 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
             )
             for task in pending:
                 task.cancel()
+            for task in pending:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            # Retrieve results so exceptions aren't logged as "never retrieved";
+            # a client disconnect (e.g. navigating away from the chat page) is
+            # a normal close, not an error, and is handled below.
+            for task in done:
+                exc = task.exception()
+                if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                    raise exc
 
     except WebSocketDisconnect:
         pass

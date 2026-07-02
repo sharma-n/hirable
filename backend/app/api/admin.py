@@ -7,6 +7,7 @@ from app.auth.dependencies import get_db, require_admin
 from app.auth.password import hash_password
 from app.auth.sessions import delete_user_sessions
 from app.db.models import User
+from app.files import delete_user_uploads
 from app.schemas import ResetPasswordRequest, UserOut
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -39,6 +40,7 @@ def delete_user(
         if admin_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the last admin")
 
+    delete_user_uploads(user_id)
     db.delete(target)
     db.commit()
 

@@ -110,6 +110,145 @@ export async function apiResetPassword(
   });
 }
 
+// ---- Profile types --------------------------------------------------------
+
+export interface SocialNetworkItem {
+  network: string;
+  username: string;
+}
+
+export interface ContactInfo {
+  name: string;
+  headline: string;
+  email: string;
+  phone: string;
+  location: string;
+  website: string;
+  social_networks: SocialNetworkItem[];
+  links: string[];
+}
+
+export interface ExperienceItem {
+  company: string;
+  position: string;    // RenderCV ExperienceEntry.position
+  start_date: string;
+  end_date: string;
+  date: string;        // free-form; mutually exclusive with start/end
+  location: string;
+  summary: string;
+  highlights: string[];
+  tech: string[];
+}
+
+export interface ProjectItem {
+  name: string;
+  link: string;
+  start_date: string;
+  end_date: string;
+  date: string;
+  location: string;
+  summary: string;
+  highlights: string[];
+  tech: string[];
+}
+
+export interface EducationItem {
+  institution: string;
+  area: string;        // RenderCV EducationEntry.area (field of study)
+  degree: string;
+  start_date: string;
+  end_date: string;
+  date: string;
+  location: string;
+  summary: string;
+  highlights: string[];
+}
+
+export interface SkillItem {
+  label: string;       // RenderCV OneLineEntry.label  e.g. "Programming Languages"
+  details: string;     // RenderCV OneLineEntry.details e.g. "Python, Go, TypeScript"
+}
+
+export interface PublicationItem {
+  title: string;
+  authors: string[];
+  doi: string;
+  url: string;
+  journal: string;
+  summary: string;
+  date: string;
+}
+
+export interface ExtrasItem {
+  title: string;
+  highlights: string[];
+  tech: string[];
+}
+
+export interface EnrichmentItem {
+  key: string;
+  value: string;
+}
+
+export interface ProfileData {
+  contact: ContactInfo;
+  summary: string;
+  skills: SkillItem[];
+  experience: ExperienceItem[];
+  projects: ProjectItem[];
+  publications: PublicationItem[];
+  education: EducationItem[];
+  extras: ExtrasItem[];
+  enrichment: EnrichmentItem[];
+}
+
+export interface Profile {
+  id: string;
+  user_id: string;
+  version: number;
+  data: ProfileData;
+  updated_at: string;
+}
+
+// ---- Profile API ----------------------------------------------------------
+
+export async function apiGetProfile(): Promise<Profile | null> {
+  const res = await fetch(`${backendBase}/api/profile`, {
+    credentials: "include",
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json() as Promise<Profile>;
+}
+
+export async function apiUpdateProfile(data: ProfileData): Promise<Profile> {
+  return apiFetch<Profile>("/api/profile", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUploadResume(file: File): Promise<Profile> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${backendBase}/api/profile/resume`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (typeof body.detail === "string") message = body.detail;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+  return res.json() as Promise<Profile>;
+}
+
 // ---- WebSocket chat -------------------------------------------------------
 
 export function openChatSocket(

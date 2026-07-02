@@ -19,11 +19,23 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 
 ---
 
+## Dependency management (uv only — do not hand-edit)
+
+- **Never hand-write a package version or edit `pyproject.toml`/`uv.lock` directly.** Do not
+  guess, recall, or assert what version of a package is "current" — you will be wrong.
+- To add or change a dependency, run `uv add <package>` (or `uv add <package> --dev`,
+  `uv remove <package>`) and let uv resolve and pin it. Same for the agent: `cd agent && uv add …`.
+- If a specific constraint is genuinely needed, still go through uv: `uv add "package>=x,<y"`.
+- To learn what version is installed, ask the tooling (`uv pip show <pkg>`, `uv tree`), never
+  memory.
+
+---
+
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0 is complete** (three-service skeleton,
-one-command Docker setup, chat round-trip working).
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0 and M1 are complete** (three-service
+skeleton + one-command setup; full auth + session management + admin console + UI redesign).
 
 ---
 
@@ -147,11 +159,58 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `config.yaml` | Single source of truth for LLM + agent config (mounted into backend + agent) |
 | `docker-compose.yml` | Three services; agent has no published port |
 | `backend/app/config.py` | YAML loader with `${VAR:-default}` expansion |
+| `backend/app/api/auth.py` | Signup / login / logout / me routes |
+| `backend/app/api/admin.py` | Admin console routes (list / delete / disable / reset-password) |
 | `backend/app/api/chat.py` | WS proxy: browser ↔ backend ↔ sidecar; injects user_id + secret |
-| `backend/app/db/` | SQLAlchemy engine, Base, stub models, `create_all()` migration runner |
+| `backend/app/auth/` | `password.py` (argon2), `sessions.py` (token lifecycle), `dependencies.py` (FastAPI guards) |
+| `backend/app/db/` | SQLAlchemy engine, Base, User + Session models, `create_all()` migration runner |
+| `backend/app/schemas.py` | Pydantic request/response schemas (`SignupRequest`, `UserOut`, …) |
+| `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD |
+| `backend/app/llm/` | `client.py` (build LLMClient from config), `deps.py` (FastAPI `get_llm` dep), `schemas.py` (ProfileModel) |
+| `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (LLM structured extraction) |
+| `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
+| `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
+| `frontend/app/(app)/profile/` | Resume dropzone + section-by-section profile editor (upload, edit, re-upload) |
+| `frontend/components/ui/textarea.tsx` | Native textarea with base-nova Tailwind styling |
 | `agent/bootstrap.py` | `create_app_from_yaml` wrapper + secret middleware + /health |
-| `frontend/app/chat/page.tsx` | M0 placeholder chat UI |
-| `frontend/lib/api.ts` | Typed WS client helper |
+| `frontend/app/(app)/` | Authenticated route group: chat, admin, profile (layout enforces session cookie) |
+| `frontend/app/(auth)/` | Auth route group: login, signup (layout redirects if already authed) |
+| `frontend/components/app-shell.tsx` | Sticky nav + theme toggle + user dropdown |
+| `frontend/components/ui/` | shadcn base-nova components (button, input, card, table, etc.) |
+| `frontend/lib/api.ts` | `apiFetch` helper + typed auth/admin/chat API functions |
+| `frontend/lib/auth.tsx` | `AuthProvider` + `useAuth()` context |
+
+---
+
+## RenderCV integration  (M5)
+
+See **`docs/rendercv.md`** for the full RenderCV v2.8 schema reference (Pydantic models, all entry
+types, design/locale/settings options, CLI reference, complete examples).
+
+The master `ProfileModel` (`backend/app/llm/schemas.py`) is intentionally a superset of RenderCV:
+
+| ProfileModel field | RenderCV mapping |
+|---|---|
+| `contact.headline` | `cv.headline` |
+| `contact.website` | `cv.website` |
+| `contact.social_networks[].network/username` | `cv.social_networks[].network/username` |
+| `experience[].position` | `ExperienceEntry.position` |
+| `experience[].start_date / end_date` | `ExperienceEntry.start_date / end_date` |
+| `experience[].highlights` | `ExperienceEntry.highlights` |
+| `experience[].summary` | `ExperienceEntry.summary` |
+| `projects[]` | `NormalEntry` (name, start/end, location, summary, highlights) |
+| `education[].area` | `EducationEntry.area` |
+| `education[].highlights` | `EducationEntry.highlights` |
+| `skills[].label / details` | `OneLineEntry.label / details` |
+| `publications[]` | `PublicationEntry` (title, authors, doi, url, journal, date) |
+| `extras[]` | `NormalEntry` / `BulletEntry` (title, highlights) |
+| `experience[].tech`, `projects[].tech`, etc. | our extension — not in RenderCV schema |
+| `enrichment[]` | our extension — not in RenderCV schema |
+
+In M5, the CV generation step will map `ProfileModel` → RenderCV YAML, call `rendercv render`, and
+stream back the PDF. The `date` field (free-form) on experience/education/projects is for cases
+where a clean `start_date`/`end_date` range cannot be expressed; use `start_date`/`end_date`
+preferentially.
 
 ---
 
@@ -161,7 +220,7 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 |---|---|---|
 | M0 — skeleton + chat round-trip | **Done** | Chat round-trip verified locally |
 | M1 — auth, sessions, admin | **Done** | argon2, httpOnly cookie sessions, first-user admin, admin console, full UI redesign (Tailwind v4 + shadcn base-nova, dark mode, app shell) |
-| M2 — resume upload → profile | Pending | |
+| M2 — resume upload → profile | **Done** | docling extraction, llm_kit structured parse, Resume+Profile DB models, section editor with useFieldArray, enrichment stub |
 | M3 — jobs shortlist | Pending | |
 | M4 — agent tools + clarifying-question loop | Pending | Tool injection API TBD |
 | M5 — CV generation + editor + PDF | Pending | TinyTeX install deferred to here |
@@ -233,3 +292,44 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   `/chat` if it is present. This is the modern, non-deprecated pattern — it runs in the
   Node.js runtime (not the Edge runtime), has full access to the cookie jar, and does not
   require any matcher config.
+
+## Gotchas encountered during M2
+
+- **LLMClient is built once in FastAPI lifespan** (`app.state.llm = build_llm()`) and injected
+  via `get_llm(request) → request.app.state.llm`. Tests override `get_llm` via
+  `app.dependency_overrides[get_llm] = lambda: fake_llm` before creating `TestClient`. The
+  lifespan must guard with `if get_llm not in app.dependency_overrides` to avoid real network
+  calls during tests.
+- **`LLMClient` from llm_kit is built via `LLMClient(AppConfig.from_dict(config["llm_kit"]))`** —
+  the backend's `config.yaml` wraps the llm_kit block under a `llm_kit:` key, so
+  `LLMClient.from_yaml` cannot read it directly.
+- **Profile is a single-row-per-user upsert** — `POST /resume` creates v1 or bumps version on
+  re-upload; `PUT /profile` also bumps version. No history table; `version` is a monotonic counter.
+- **Resume file storage is per-user** — `/app/data/uploads/{user_id}/{uuid}.{ext}`. `delete_user_uploads`
+  must be called in the admin delete-user flow before ORM delete to avoid orphaned files on disk.
+- **Bullets stored as `list[str]`; edited as textarea** — form boundary transforms:
+  `bullets.join("\n")` to display, `value.split("\n").map(strip "- ").filter(Boolean)` to save.
+  Tech stacks use comma-separation. Both conversions happen in `profileToForm` / `formToProfile`.
+- **`apiUploadResume` must use bare `fetch` with `FormData`** — never set `Content-Type` header
+  manually; the browser must set it with the multipart boundary. `apiFetch` always sets
+  `Content-Type: application/json`, so it cannot be reused for multipart uploads.
+- **`@base-ui/react` has no Textarea primitive** — `frontend/components/ui/textarea.tsx` wraps
+  a plain `<textarea>` with the same Tailwind classes as Input.
+- **Anthropic's structured-output grammar compiler rejects `ProfileModel` outright** with HTTP
+  400 `"The compiled grammar is too large"` — this is NOT about the documented 24-optional-
+  parameter cap (making every field required, via `_require()` in `backend/app/llm/schemas.py`,
+  was tried first and did not fix it). Bisection (send the same tiny résumé through hand-built
+  subset schemas, see the repro pattern below) proved grammar size is a function of the
+  **schema alone**, independent of résumé content/length, and pinned the cause to the four
+  nested list-of-object fields — `experience`, `projects`, `education`, `publications` (each
+  ~7-9 string fields per item). Any 3 of those 4 fields fit under the limit together with the
+  light fields (`contact`, `summary`, `skills`, `extras`); all 4 together do not. Fix:
+  `parse_resume()` in `backend/app/parsing/profile.py` splits extraction into two concurrent
+  `llm.invoke()` calls against `ProfileModelPart1` (`contact`+`summary`+`skills`+`experience`+
+  `projects`) and `ProfileModelPart2` (`education`+`publications`+`extras`+`enrichment`), then
+  merges the two parsed halves into one `ProfileModel` in Python. Tests assert
+  `fake_llm.invoke.call_count == 2`, not `assert_called_once()`. **If `ProfileModel` grows a
+  new nested list-of-object field in a future milestone, re-bisect** — don't assume the 2-call
+  split still has margin; the repro script pattern is: build ad hoc Pydantic models from subsets
+  of the existing item classes, call `llm.invoke(response_model=candidate)` for each, and see
+  which combinations 400.

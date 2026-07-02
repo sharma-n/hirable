@@ -158,6 +158,9 @@ app:
     - { display_name: "Haiku",  model_id: "claude-haiku-4-5-20251001" }
     - { display_name: "Sonnet", model_id: "claude-sonnet-4-6" }
     - { display_name: "Opus",   model_id: "claude-opus-4-8" }
+  auth:
+    session_ttl_days: 14                 # httpOnly cookie TTL
+    cookie_secure: false                 # set to true behind HTTPS in prod (${COOKIE_SECURE:-false})
   tracking:
     stale_after_days: 15                 # idle → Stale
     auto_reject_after_days: 30           # idle → Rejected (ghosted)
@@ -277,7 +280,7 @@ finalize working memory.
 | Table | Key columns |
 |---|---|
 | `users` | id, email (unique), password_hash, role (`admin`/`user`), is_active, created_at |
-| `sessions` | token (pk), user_id → users, expires_at |
+| `sessions` | token_hash (pk — SHA-256 of the opaque cookie token), user_id → users, expires_at |
 | `resumes` | id, user_id, filename, format (`pdf`/`docx`/`tex`), raw_text, uploaded_at |
 | `profiles` | id, user_id, version, data (JSON master profile), updated_at |
 | `jobs` | id, user_id, source_url, raw_text, parsed (JSON), shortlist_status, created_at |
@@ -403,12 +406,14 @@ callbacks backing §6.2.
 - **Acceptance:** ✅ chat round-trip verified locally — message streams back through
   proxy → sidecar (real LLM) → frontend placeholder chat page.
 
-**M1 — Auth, sessions, admin**
-- argon2 password hashing; httpOnly-cookie sessions; signup/login/logout; `me`.
-- First account auto-promoted to admin; admin console (list/delete-cascade/reset-password/disable);
-  all public routes scoped to the session user.
-- **Acceptance:** two users are isolated; admin deletes user B → B's rows + files gone and B's session
-  invalid.
+**M1 — Auth, sessions, admin** ✅
+- argon2 password hashing; httpOnly-cookie sessions (`hirable_session`, SameSite=Lax, SHA-256 hash
+  stored in DB); signup/login/logout/me. First account auto-promoted to admin.
+- Admin console (list/delete-cascade/reset-password/disable); all public routes scoped to the session
+  user; unauthenticated WS connections rejected with close code 4401.
+- Full UI rebuild: Tailwind v4 + shadcn base-nova, dark/light mode, app shell, redesigned chat.
+- **Acceptance:** ✅ two users isolated; admin delete cascades + invalidates sessions; 17/17 tests
+  green; TypeScript clean; middleware-free route protection via server-component `cookies()`.
 
 **M2 — Resume upload → master profile**
 - Upload pdf/docx/tex → docling/text extraction → `response_model=ProfileModel` → `profiles` v1;

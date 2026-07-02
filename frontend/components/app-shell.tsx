@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -33,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/profile", label: "Profile", icon: User, disabled: true },
+  { href: "/profile", label: "Profile", icon: User },
   { href: "/jobs", label: "Jobs", icon: Bookmark, disabled: true },
   { href: "/documents", label: "Documents", icon: FileText, disabled: true },
   { href: "/analytics", label: "Analytics", icon: BarChart2, disabled: true },
@@ -142,22 +143,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium truncate">{user?.email}</p>
-                  <Badge variant="secondary" className="w-fit text-xs capitalize">
-                    {user?.role}
-                  </Badge>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive cursor-pointer"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-2 size-4" />
-                Sign out
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm font-medium truncate">{user?.email}</p>
+                    <Badge variant="secondary" className="w-fit text-xs capitalize">
+                      {user?.role}
+                    </Badge>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-2 size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

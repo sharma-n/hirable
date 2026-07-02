@@ -41,3 +41,23 @@ class UserOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ResumeOut(BaseModel):
+    id: str
+    user_id: str
+    filename: str
+    format: str
+    uploaded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProfileOut(BaseModel):
+    id: str
+    user_id: str
+    version: int
+    data: dict
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

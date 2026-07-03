@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   Briefcase,
-  MessageSquare,
   Moon,
   Sun,
   FileText,
@@ -33,7 +32,6 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/jobs", label: "Jobs", icon: Bookmark },
   { href: "/documents", label: "Documents", icon: FileText, disabled: true },
@@ -77,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center px-4 gap-4">
           {/* Brand */}
-          <Link href="/chat" className="flex items-center gap-2 shrink-0">
+          <Link href="/profile" className="flex items-center gap-2 shrink-0">
             <Briefcase className="size-5 text-primary" />
             <span className="font-bold tracking-tight text-sm">hirable</span>
           </Link>
@@ -167,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Page content */}
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex flex-1 flex-col min-h-0">{children}</main>
     </div>
   );
 }

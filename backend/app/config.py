@@ -50,3 +50,7 @@ def app_config() -> dict:
 
 def agent_base_url() -> str:
     return app_config().get("agent_base_url", "http://agent:8000")
+
+
+def selectable_models() -> list[dict]:
+    return app_config().get("selectable_models", [])

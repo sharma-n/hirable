@@ -6,13 +6,20 @@ import json
 import os
 
 import websockets
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from app.auth.dependencies import current_user
 from app.auth.sessions import COOKIE_NAME, resolve_session
-from app.config import agent_base_url
+from app.config import agent_base_url, selectable_models
 from app.db.engine import SessionLocal
+from app.db.models import User
 
 router = APIRouter()
+
+
+@router.get("/api/chat/models")
+def list_models(user: User = Depends(current_user)) -> dict:
+    return {"models": selectable_models()}
 
 
 @router.websocket("/api/chat/ws/{conversation_id}")
@@ -34,7 +41,12 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
     await websocket.accept()
 
     secret = os.environ.get("AGENT_INTERNAL_SECRET", "")
-    upstream_url = f"ws://{agent_base_url().removeprefix('http://')}/ws/{conversation_id}"
+    # Namespace by user_id: agent_kit conversations are globally keyed and
+    # user-owned (SessionStore.load raises UnauthorizedError on cross-user access),
+    # so a fixed client-chosen id like "profile" would collide across users.
+    # The internal /internal/context endpoint strips this prefix back off.
+    upstream_conversation_id = f"{user_id}:{conversation_id}"
+    upstream_url = f"ws://{agent_base_url().removeprefix('http://')}/ws/{upstream_conversation_id}"
     headers = {"X-Internal-Secret": secret}
 
     try:

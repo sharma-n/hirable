@@ -58,7 +58,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (currentUser && currentUser.role !== "admin") {
-      router.replace("/chat");
+      router.replace("/profile");
       return;
     }
     fetchUsers();

@@ -3,5 +3,5 @@ import { redirect } from "next/navigation";
 
 export default async function Home() {
   const cookieStore = await cookies();
-  redirect(cookieStore.has("hirable_session") ? "/chat" : "/login");
+  redirect(cookieStore.has("hirable_session") ? "/profile" : "/login");
 }

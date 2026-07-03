@@ -2,9 +2,9 @@
 
 export type AgentFrame =
   | { type: "text"; text: string }
-  | { type: "tool_call"; name: string; arguments: string }
-  | { type: "tool_result"; name: string; ok: boolean; content: string }
-  | { type: "turn_complete"; stop_reason: string; usage: unknown }
+  | { type: "tool_call"; call_id: string; name: string; arguments: Record<string, unknown> }
+  | { type: "tool_result"; call_id: string; name: string; ok: boolean; content: string }
+  | { type: "turn_complete"; stop_reason: string; usage: unknown; iterations: number }
   | { type: "error"; error: string };
 
 export interface User {
@@ -312,7 +312,17 @@ export async function apiDeleteJob(jobId: string): Promise<void> {
   return apiFetch<void>(`/api/jobs/${jobId}`, { method: "DELETE" });
 }
 
-// ---- WebSocket chat -------------------------------------------------------
+// ---- Chat / agent API -------------------------------------------------------
+
+export interface SelectableModel {
+  display_name: string;
+  model_id: string;
+}
+
+export async function apiListModels(): Promise<SelectableModel[]> {
+  const res = await apiFetch<{ models: SelectableModel[] }>("/api/chat/models");
+  return res.models;
+}
 
 export function openChatSocket(
   conversationId: string,

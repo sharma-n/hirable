@@ -6,6 +6,7 @@ import { useForm, type UseFormReturn } from "react-hook-form";
 import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AgentPanel } from "@/components/agent-panel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -200,6 +202,27 @@ function WhyOpenedSection({ form }: { form: UseFormReturn<JobFormValues> }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+function ArtifactsPlaceholder() {
+  return (
+    <Card className="opacity-60">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">CV & cover letter</CardTitle>
+          <Badge variant="secondary" className="text-xs">
+            Coming in M5
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Once you're ready, the assistant will generate a tailored CV (RenderCV YAML + PDF
+          preview) and cover letter for this role here.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -207,6 +230,13 @@ export default function JobDetailPage() {
   const [showRawText, setShowRawText] = useState(false);
 
   const form = useForm<JobFormValues>({ defaultValues: EMPTY_FORM });
+
+  function handleAgentToolResult(name: string, ok: boolean) {
+    if (!ok) return;
+    if (["update_profile_section", "add_profile_item", "record_clarification"].includes(name)) {
+      toast.info("Your profile was updated based on this conversation — see the Profile page.");
+    }
+  }
 
   useEffect(() => {
     apiGetJob(params.id)
@@ -245,24 +275,22 @@ export default function JobDetailPage() {
     }
   }
 
+  let rightPane: React.ReactNode;
   if (job === "loading") {
-    return (
+    rightPane = (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
-  }
-
-  if (job === null) {
-    return (
+  } else if (job === null) {
+    rightPane = (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Job not found.</p>
       </div>
     );
-  }
-
-  return (
-    <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
+  } else {
+    rightPane = (
+    <div className="max-w-3xl w-full px-4 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -353,6 +381,8 @@ export default function JobDetailPage() {
           )}
         </Card>
 
+        <ArtifactsPlaceholder />
+
         <div className="flex justify-end pb-8">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="size-4 animate-spin mr-1.5" />}
@@ -360,6 +390,22 @@ export default function JobDetailPage() {
           </Button>
         </div>
       </form>
+    </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-4 p-4">
+      <div className="w-[380px] shrink-0 sticky top-[4.5rem] h-[calc(100vh_-_5.5rem)] flex flex-col">
+        <AgentPanel
+          conversationBase={`job:${params.id}`}
+          emptyStateTitle="Let's see how you match this role"
+          emptyStateSubtitle="I'll compare your profile against this job and ask about anything worth clarifying."
+          starterPrompt="Please compare my profile against this job and tell me what's missing or could be improved."
+          onToolResult={handleAgentToolResult}
+        />
+      </div>
+      <div className="flex-1 min-w-0 flex justify-center">{rightPane}</div>
     </div>
   );
 }

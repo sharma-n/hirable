@@ -6,7 +6,7 @@ import { AuthProvider } from "@/lib/auth";
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   if (cookieStore.has("hirable_session")) {
-    redirect("/chat");
+    redirect("/profile");
   }
   return (
     <AuthProvider>

@@ -36,7 +36,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(values.email, values.password);
-      router.push("/chat");
+      router.push("/profile");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       if (msg.includes("email")) {

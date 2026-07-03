@@ -40,7 +40,7 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signup(values.email, values.password);
-      router.push("/chat");
+      router.push("/profile");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Sign up failed";
       if (msg.includes("email")) {

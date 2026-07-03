@@ -9,6 +9,7 @@ import {
   Loader2,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { AgentPanel } from "@/components/agent-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +40,27 @@ import {
   type Profile,
   type ProfileData,
 } from "@/lib/api";
+
+// Sections written by the profile-enrichment tools (update_profile_section /
+// add_profile_item / record_clarification) — used to diff old vs. new profile
+// data and briefly highlight whichever section(s) the agent just touched.
+const PROFILE_SECTION_KEYS = [
+  "contact",
+  "summary",
+  "skills",
+  "experience",
+  "projects",
+  "publications",
+  "education",
+  "extras",
+  "enrichment",
+] as const;
+
+function changedSections(a: ProfileData, b: ProfileData): string[] {
+  return PROFILE_SECTION_KEYS.filter(
+    (key) => JSON.stringify(a[key]) !== JSON.stringify(b[key]),
+  );
+}
 
 // ── Form types ──────────────────────────────────────────────────────────────
 
@@ -266,13 +289,50 @@ function formToProfile(values: ProfileFormValues): ProfileData {
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({
+  title,
+  highlighted,
+  children,
+}: {
+  title: string;
+  highlighted?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+
+  // Force the section open when the agent just touched it, so the highlighted
+  // change is actually visible rather than hidden behind a collapsed header.
+  useEffect(() => {
+    if (highlighted) setOpen(true);
+  }, [highlighted]);
+
   return (
-    <Card>
+    <Card
+      className={cn(
+        "transition-shadow duration-700",
+        highlighted && "ring-2 ring-primary shadow-md",
+      )}
+    >
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          {open ? (
+            <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+          )}
+          <CardTitle className="text-base flex items-center gap-2">{title}</CardTitle>
+          {highlighted && (
+            <Badge variant="secondary" className="text-[10px]">
+              Updated by agent
+            </Badge>
+          )}
+        </button>
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      {open && <CardContent className="space-y-4">{children}</CardContent>}
     </Card>
   );
 }
@@ -319,7 +379,13 @@ function ItemHeader({
 
 // ── Section components ───────────────────────────────────────────────────────
 
-function ContactSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function ContactSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields: snFields, append: snAppend, remove: snRemove } = useFieldArray({
     control,
@@ -327,7 +393,7 @@ function ContactSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
   });
 
   return (
-    <SectionCard title="Contact">
+    <SectionCard title="Contact" highlighted={highlighted}>
       <div className="grid grid-cols-2 gap-4">
         <Field label="Name">
           <Input {...register("contact.name")} placeholder="Jane Doe" />
@@ -397,20 +463,32 @@ function ContactSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
   );
 }
 
-function SummarySection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function SummarySection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   return (
-    <SectionCard title="Summary">
+    <SectionCard title="Summary" highlighted={highlighted}>
       <Textarea {...form.register("summary")} placeholder="A brief professional summary…" rows={4} />
     </SectionCard>
   );
 }
 
-function SkillsSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function SkillsSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "skills" });
 
   return (
-    <SectionCard title="Skills">
+    <SectionCard title="Skills" highlighted={highlighted}>
       <p className="text-xs text-muted-foreground -mt-2">
         Group related skills — e.g. label "Programming Languages", details "Python, Go, TypeScript"
       </p>
@@ -452,12 +530,18 @@ function SkillsSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
   );
 }
 
-function ExperienceSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function ExperienceSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "experience" });
 
   return (
-    <SectionCard title="Experience">
+    <SectionCard title="Experience" highlighted={highlighted}>
       <div className="space-y-5">
         {fields.map((field, i) => (
           <div key={field.id} className="border rounded-xl p-4 space-y-3">
@@ -527,12 +611,18 @@ function ExperienceSection({ form }: { form: UseFormReturn<ProfileFormValues> })
   );
 }
 
-function ProjectsSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function ProjectsSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "projects" });
 
   return (
-    <SectionCard title="Projects">
+    <SectionCard title="Projects" highlighted={highlighted}>
       <div className="space-y-5">
         {fields.map((field, i) => (
           <div key={field.id} className="border rounded-xl p-4 space-y-3">
@@ -599,12 +689,18 @@ function ProjectsSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
   );
 }
 
-function PublicationsSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function PublicationsSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "publications" });
 
   return (
-    <SectionCard title="Publications">
+    <SectionCard title="Publications" highlighted={highlighted}>
       <div className="space-y-5">
         {fields.map((field, i) => (
           <div key={field.id} className="border rounded-xl p-4 space-y-3">
@@ -665,12 +761,18 @@ function PublicationsSection({ form }: { form: UseFormReturn<ProfileFormValues> 
   );
 }
 
-function EducationSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function EducationSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "education" });
 
   return (
-    <SectionCard title="Education">
+    <SectionCard title="Education" highlighted={highlighted}>
       <div className="space-y-5">
         {fields.map((field, i) => (
           <div key={field.id} className="border rounded-xl p-4 space-y-3">
@@ -740,12 +842,18 @@ function EducationSection({ form }: { form: UseFormReturn<ProfileFormValues> }) 
   );
 }
 
-function ExtrasSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
+function ExtrasSection({
+  form,
+  highlighted,
+}: {
+  form: UseFormReturn<ProfileFormValues>;
+  highlighted?: boolean;
+}) {
   const { register, control } = form;
   const { fields, append, remove, move } = useFieldArray({ control, name: "extras" });
 
   return (
-    <SectionCard title="Extras">
+    <SectionCard title="Extras" highlighted={highlighted}>
       <p className="text-xs text-muted-foreground -mt-2">
         Patents, talks, awards, certifications, volunteering, interests…
       </p>
@@ -789,27 +897,64 @@ function ExtrasSection({ form }: { form: UseFormReturn<ProfileFormValues> }) {
   );
 }
 
-function EnrichmentStub() {
+function EnrichmentSection({
+  items,
+  highlighted,
+}: {
+  items: { key: string; value: string }[];
+  highlighted?: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (highlighted) setOpen(true);
+  }, [highlighted]);
+
   return (
-    <Card className="opacity-60">
+    <Card className={cn("transition-shadow duration-700", highlighted && "ring-2 ring-primary shadow-md")}>
       <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-primary" />
-          <CardTitle className="text-base">Profile enrichment</CardTitle>
-          <Badge variant="secondary" className="text-xs ml-1">
-            Coming in M4
-          </Badge>
-        </div>
-        <CardDescription>
-          Chat with the assistant to fill in profile gaps — target role, job-search context, and
-          extra details the agent uses when tailoring your CV.
-        </CardDescription>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          {open ? (
+            <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+          )}
+          <Sparkles className="size-4 text-primary shrink-0" />
+          <CardTitle className="text-base">Clarifications</CardTitle>
+          {highlighted && (
+            <Badge variant="secondary" className="text-[10px]">
+              Updated by agent
+            </Badge>
+          )}
+        </button>
+        {open && (
+          <CardDescription>
+            Answers the assistant has recorded from chatting with you in the profile panel.
+          </CardDescription>
+        )}
       </CardHeader>
-      <CardContent>
-        <Button variant="outline" size="sm" disabled>
-          Start enrichment session
-        </Button>
-      </CardContent>
+      {open && (
+        <CardContent>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing recorded yet — chat with the assistant on the left to fill in profile gaps.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((item, i) => (
+                <li key={i} className="text-sm">
+                  <span className="font-medium">{item.key}:</span>{" "}
+                  <span className="text-muted-foreground">{item.value}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
@@ -911,7 +1056,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null | "loading">("loading");
   const [uploading, setUploading] = useState(false);
   const [reUploadOpen, setReUploadOpen] = useState(false);
+  const [highlightSections, setHighlightSections] = useState<string[]>([]);
   const reUploadInputRef = useRef<HTMLInputElement>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<ProfileFormValues>({ defaultValues: EMPTY_FORM });
 
@@ -926,6 +1073,35 @@ export default function ProfilePage() {
         setProfile(null);
       });
   }, [form]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    };
+  }, []);
+
+  async function handleAgentToolResult(name: string, ok: boolean) {
+    if (!ok) return;
+    if (!["update_profile_section", "add_profile_item", "record_clarification"].includes(name)) {
+      return;
+    }
+    try {
+      const updated = await apiGetProfile();
+      if (!updated) return;
+      if (form.formState.isDirty) {
+        toast.info("The assistant updated your profile — reload to see the changes.");
+        return;
+      }
+      const changed = profile && profile !== "loading" ? changedSections(profile.data, updated.data) : [];
+      setProfile(updated);
+      form.reset(profileToForm(updated.data));
+      setHighlightSections(changed);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = setTimeout(() => setHighlightSections([]), 4000);
+    } catch {
+      // Non-fatal — the user's next manual refresh will pick up the change.
+    }
+  }
 
   async function handleUpload(file: File) {
     const startedAt = performance.now();
@@ -964,112 +1140,129 @@ export default function ProfilePage() {
     }
   }
 
+  let rightPane: React.ReactNode;
   if (profile === "loading") {
-    return (
+    rightPane = (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     );
-  }
+  } else if (profile === null) {
+    rightPane = <Dropzone onUpload={handleUpload} uploading={uploading} />;
+  } else {
+    rightPane = (
+      <div className="max-w-3xl w-full px-4 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold">Master Profile</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Version {profile.version} · Updated{" "}
+              {new Date(profile.updated_at).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <AlertDialog open={reUploadOpen} onOpenChange={setReUploadOpen}>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={uploading || form.formState.isSubmitting}
+                  />
+                }
+              >
+                {uploading ? (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                ) : (
+                  <Upload className="size-4 mr-1.5" />
+                )}
+                Re-upload
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Re-upload resume?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will re-parse your resume and overwrite the current profile. Any manual
+                    edits will be lost.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      setReUploadOpen(false);
+                      reUploadInputRef.current?.click();
+                    }}
+                  >
+                    Continue
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <input
+              ref={reUploadInputRef}
+              type="file"
+              accept=".pdf,.docx,.tex"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleUpload(file);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              disabled={form.formState.isSubmitting || uploading}
+              onClick={form.handleSubmit(onSubmit)}
+            >
+              {form.formState.isSubmitting && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              Save
+            </Button>
+          </div>
+        </div>
 
-  if (profile === null) {
-    return <Dropzone onUpload={handleUpload} uploading={uploading} />;
+        {/* Editor */}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <ContactSection form={form} highlighted={highlightSections.includes("contact")} />
+          <SummarySection form={form} highlighted={highlightSections.includes("summary")} />
+          <SkillsSection form={form} highlighted={highlightSections.includes("skills")} />
+          <ExperienceSection form={form} highlighted={highlightSections.includes("experience")} />
+          <ProjectsSection form={form} highlighted={highlightSections.includes("projects")} />
+          <PublicationsSection form={form} highlighted={highlightSections.includes("publications")} />
+          <EducationSection form={form} highlighted={highlightSections.includes("education")} />
+          <ExtrasSection form={form} highlighted={highlightSections.includes("extras")} />
+          <EnrichmentSection
+            items={profile.data.enrichment}
+            highlighted={highlightSections.includes("enrichment")}
+          />
+          <div className="flex justify-end pb-8">
+            <Button type="submit" disabled={form.formState.isSubmitting || uploading}>
+              {form.formState.isSubmitting && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              Save changes
+            </Button>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-3xl mx-auto w-full px-4 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold">Master Profile</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Version {profile.version} · Updated{" "}
-            {new Date(profile.updated_at).toLocaleDateString()}
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <AlertDialog open={reUploadOpen} onOpenChange={setReUploadOpen}>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={uploading || form.formState.isSubmitting}
-                />
-              }
-            >
-              {uploading ? (
-                <Loader2 className="size-4 animate-spin mr-1.5" />
-              ) : (
-                <Upload className="size-4 mr-1.5" />
-              )}
-              Re-upload
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Re-upload resume?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will re-parse your resume and overwrite the current profile. Any manual
-                  edits will be lost.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    setReUploadOpen(false);
-                    reUploadInputRef.current?.click();
-                  }}
-                >
-                  Continue
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <input
-            ref={reUploadInputRef}
-            type="file"
-            accept=".pdf,.docx,.tex"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleUpload(file);
-              e.target.value = "";
-            }}
-          />
-          <Button
-            size="sm"
-            disabled={form.formState.isSubmitting || uploading}
-            onClick={form.handleSubmit(onSubmit)}
-          >
-            {form.formState.isSubmitting && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            Save
-          </Button>
-        </div>
+    <div className="flex items-start gap-4 p-4">
+      <div className="w-[380px] shrink-0 sticky top-[4.5rem] h-[calc(100vh_-_5.5rem)] flex flex-col">
+        <AgentPanel
+          conversationBase="profile"
+          emptyStateTitle="Let's fill the gaps in your profile"
+          emptyStateSubtitle="Ask me to review your profile, or just tell me about your experience — I'll ask questions and save what you tell me."
+          starterPrompt="Please review my profile and ask me questions to help fill in any gaps."
+          onToolResult={handleAgentToolResult}
+        />
       </div>
-
-      {/* Editor */}
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <ContactSection form={form} />
-        <SummarySection form={form} />
-        <SkillsSection form={form} />
-        <ExperienceSection form={form} />
-        <ProjectsSection form={form} />
-        <PublicationsSection form={form} />
-        <EducationSection form={form} />
-        <ExtrasSection form={form} />
-        <EnrichmentStub />
-        <div className="flex justify-end pb-8">
-          <Button type="submit" disabled={form.formState.isSubmitting || uploading}>
-            {form.formState.isSubmitting && (
-              <Loader2 className="size-4 animate-spin mr-1.5" />
-            )}
-            Save changes
-          </Button>
-        </div>
-      </form>
+      <div className="flex-1 min-w-0 flex justify-center">{rightPane}</div>
     </div>
   );
 }

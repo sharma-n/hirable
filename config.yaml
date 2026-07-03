@@ -41,8 +41,12 @@ stores:
   permission_backend: memory
 
 tools:
-  # Global fallback allowlist — custom hirable tools are added here in M4.
-  default_allowed: []
+  # Global fallback allowlist — every user gets these by default (M4: no per-user
+  # tiering needed yet for the core profile-enrichment write tools).
+  default_allowed:
+    - update_profile_section
+    - add_profile_item
+    - record_clarification
 
 mcp:
   servers: []
@@ -53,7 +57,7 @@ telemetry:
 # ---- app (consumed by backend only) ----
 app:
   agent_base_url: ${AGENT_BASE_URL:-http://agent:8000}
-  internal_base_url: http://backend:8000
+  internal_base_url: ${INTERNAL_BASE_URL:-http://backend:8000}
   selectable_models:
     - display_name: "Haiku"
       model_id: claude-haiku-4-5-20251001

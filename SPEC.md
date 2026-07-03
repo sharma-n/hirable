@@ -76,7 +76,9 @@ hirable/
 ├─ docs/
 │  └─ good_resume.md           # resume/cover-letter rulebook (injected into agent prompts)
 ├─ frontend/                   # Next.js 16 (TypeScript)
-│  └─ app/  (auth, admin, profile, jobs, chat, editor, tracker, analytics) + components/ + lib/api
+│  └─ app/  (auth, admin, profile, jobs, editor, tracker, analytics) + components/ + lib/api
+│     # No standalone chat page — the agent is embedded via components/agent-panel.tsx
+│     # inside the profile and job-detail pages (see SPEC §6.0).
 ├─ backend/                    # FastAPI (uv-managed, Python 3.13)
 │  ├─ pyproject.toml
 │  └─ app/
@@ -206,9 +208,31 @@ delete / password reset invalidates them).
 
 ## 6. Agent integration (agent_kit)
 
-### 6.1 Bootstrap (native tools, no MCP)
+### 6.0 No standalone chat tab — two contextual agent panels
+
+**Design pivot from the original spec (decided during M4 planning):** there is no general-purpose
+"Chat" nav tab. Instead the agent appears embedded in a split-screen panel on the two pages where
+a conversation is actually useful:
+
+1. **Profile page** (`/profile`) — the agent gathers/enriches profile information per
+   `docs/good_resume.md`, with no specific job in view. The right-hand pane shows the full profile
+   updating live as the agent writes, with the section(s) it just touched briefly highlighted.
+2. **Job detail page** (`/jobs/{id}`) — the agent already has the base profile *and* this job's
+   parsed JD; it does gap analysis and asks clarifying questions specific to that role. (From M5
+   onward this panel also gains an artifact pane — RenderCV YAML + PDF preview.)
+
+Both panels are the same `AgentPanel` component, parameterized by a **conversation-id base**:
+`profile` or `` job:{job_id} ``. The chat proxy (`backend/app/api/chat.py`) namespaces this by the
+authenticated `user_id` before forwarding upstream (`{user_id}:{base}`), because agent_kit
+conversations are globally keyed and user-owned — a bare id like `profile` would otherwise collide
+across users. A client-side "new chat" button appends a generation suffix (`profile.2`) to start a
+fresh thread without losing the stable id's resumability; the internal API strips both the
+namespace prefix and the generation suffix before interpreting the conversation's mode.
+
+### 6.1 Bootstrap (native tools, no MCP, no read tools)
 `agent/bootstrap.py` builds the agent_kit app by loading the shared `config.yaml`, stripping the
-`app:` block (agent_kit rejects unknown top-level keys), and calling:
+`app:` block (agent_kit rejects unknown top-level keys), embedding `docs/good_resume.md` into the
+static `agent.system_prompt`, and calling:
 
 ```python
 from agent_kit.config.loader import load_dict
@@ -216,12 +240,15 @@ from agent_kit.config.schema import AgentKitConfig
 from agent_kit.service import AgentService
 from agent_kit.serving.app import create_app
 
-service = AgentService.build(load_dict(AgentKitConfig, agent_raw))
+service = AgentService.build(
+    load_dict(AgentKitConfig, agent_raw),
+    extra_tools=build_tools(internal_client),          # agent/tools/
+    system_prompt_fn=build_system_prompt_fn(internal_client),  # agent/tools/context.py
+)
 app = create_app(service)
-# then register custom tools on service (M4)
 ```
 
-Each custom tool is a native agent_kit `Tool` (exact API to be confirmed in M4):
+Each custom tool is a native agent_kit `Tool`:
 ```python
 Tool(
     definition=ToolDefinition(name=..., description=..., parameters={...JSON schema...}),
@@ -229,49 +256,71 @@ Tool(
 )
 ```
 
-Tools are permission-gated via `service.stores.permissions.grant(user_id, tool_names)`.
-`tools.default_allowed` in `config.yaml` is the global fallback. Tool errors become observations,
-never exceptions — consistent with agent_kit. The agent's **system prompt embeds
-`docs/good_resume.md`** so all drafting follows the rulebook.
+**Per-turn dynamic context, not read tools.** agent_kit calls `system_prompt_fn(user_id,
+conversation_id)` fresh on every turn and appends its return value to the system prompt as a
+tier-0 (never-evicted) block. `build_system_prompt_fn` (in `agent/tools/context.py`) fetches this
+from the backend's `POST /internal/context`, which returns the user's current profile JSON (and,
+in job mode, the job's parsed JSON) plus mode-specific instructions. Because the agent's own writes
+are reflected in the very next turn's context automatically, there is **no `get_profile` /
+`list_jobs` / `get_job` read tool** — that would just be a redundant round trip. Tools are
+**write-only**.
+
+Tools are permission-gated via `service.stores.permissions.grant(user_id, tool_names)`;
+`tools.default_allowed` in `config.yaml` is the global fallback and is what M4 uses (every user
+gets the same three write tools — no per-user tiering needed yet). Tool errors become observations,
+never exceptions — the registry itself converts an uncaught handler exception into
+`ToolResult(ok=False)`, so handlers only need to special-case *expected* failures (404/422) into a
+readable message.
 
 ### 6.2 Tool catalogue (all `user_id`-scoped via the internal API)
 | Tool | Purpose |
 |---|---|
-| `get_profile` | Read the user's canonical master profile |
-| `update_profile_section` / `add_profile_item` | Edit/append profile sections |
-| `record_clarification(key, value)` | Persist a clarifying-question answer into the profile (enrichment) |
-| `list_jobs` / `get_job(job_id)` | Read the user's saved jobs |
-| `draft_cv(job_id)` | Produce RenderCV YAML for a job (LLM structured output, §8.3) |
-| `draft_cover_letter(job_id)` | Produce cover-letter source for a job |
-| `compile_document(document_id)` | Compile a stored document to PDF, return its URL |
-| `save_document(...)` | Persist a CV/cover-letter draft (source + new version) |
-| `list_application_status` | (optional) Let the agent answer tracking questions |
+| `update_profile_section(section, value)` | Replace an entire profile section (overwrites) |
+| `add_profile_item(section, item)` | Append one item to a list-type profile section, without clobbering existing items |
+| `record_clarification(key, value)` | Persist a clarifying-question answer into the profile's `enrichment` list (implemented as `add_profile_item` with `section="enrichment"`) |
+| `draft_cv(job_id)` | *(M5)* Produce RenderCV YAML for a job (LLM structured output, §8.3) |
+| `draft_cover_letter(job_id)` | *(M5/M6)* Produce cover-letter source for a job |
+| `compile_document(document_id)` | *(M5)* Compile a stored document to PDF, return its URL |
+| `save_document(...)` | *(M5)* Persist a CV/cover-letter draft (source + new version) |
+| `list_application_status` | *(M7, optional)* Let the agent answer tracking questions |
+
+`get_profile` / `list_jobs` / `get_job` from the original catalogue were **dropped** — see §6.1;
+the same data reaches the agent via `system_prompt_fn` instead.
 
 ### 6.3 Memory configuration — and why episodic is OFF
-- **Working memory + session store: ON** — needed for multi-turn coherence within a chat.
+- **Working memory + session store: ON** — needed for multi-turn coherence within a conversation.
 - **Episodic (vector) recall: OFF.** The source of truth (profile, jobs, documents) lives in the app
-  DB and is fetched **deterministically via tools**, so the agent never needs fuzzy vector recall to
-  "remember" facts. Episodic only adds marginal cross-conversation fuzzy recall while **forcing an
-  embedding model into the install** (hurting the one-command setup goal). It is a config flag
-  (`memory.episodic.enabled`) we can flip on later if we want "you mentioned X on another job" recall.
+  DB and is injected **deterministically per turn** (§6.1), so the agent never needs fuzzy vector
+  recall to "remember" facts. Episodic only adds marginal cross-conversation fuzzy recall while
+  **forcing an embedding model into the install** (hurting the one-command setup goal). It is a
+  config flag (`memory.episodic.enabled`) we can flip on later if we want "you mentioned X on
+  another job" recall.
 - **agent_kit factual auto-extraction: OFF.** Enrichments are persisted **explicitly** via
   `record_clarification` into the canonical profile, keeping a single source of truth (no duplicate
   fact store to reconcile).
 
 ### 6.4 Model selection & mid-conversation switching
 - The provider/model is set once in `config.yaml` (`llm_kit.llm`).
-- `app.selectable_models` is surfaced to the chat UI as a picker. Choosing a model calls the backend,
-  which calls the sidecar's `AgentService.set_conversation_model(model_id)` for that conversation.
+- `app.selectable_models` is surfaced in each `AgentPanel` as a picker (`GET /api/chat/models`).
+  Choosing a model sends `{"type": "set_model", "model": model_id}` over the existing WS
+  connection; the backend's chat proxy already forwards arbitrary JSON frames with the trusted
+  `user_id` injected, so no dedicated REST mutation endpoint or proxy change was needed — the
+  sidecar's own WS handler resolves this to `service.set_conversation_model(conversation_id,
+  user_id, model_id)`.
 - Models sharing the configured endpoint switch natively. For **true cross-provider** switching, the
   admin can point `llm_kit.llm` at an **OpenAI-compatible gateway (e.g. LiteLLM)** that fronts multiple
   providers — documented as optional, not required.
 
 ### 6.5 Chat transport
-Frontend opens an SSE/WebSocket to the backend chat proxy → backend attaches `user_id` + secret and
-relays to the sidecar's WS/SSE → streams typed `AgentEvent` frames
-(`TextDelta` / `ToolCallStarted` / `ToolResult` / `TurnComplete`) back to the frontend. The frontend
-never contacts the sidecar directly. Conversation end (disconnect/idle) is signalled to the sidecar to
-finalize working memory.
+Each `AgentPanel` opens a WebSocket to the backend chat proxy (`/api/chat/ws/{conversation_id}`,
+where `conversation_id` is `profile`, `` job:{job_id} ``, or one with a `.{n}` "new chat"
+generation suffix) → backend resolves the session cookie to a trusted `user_id`, namespaces the
+conversation id (`{user_id}:{conversation_id}`), and relays to the sidecar's WS with
+`X-Internal-Secret` → streams typed `AgentEvent` frames (`text` / `tool_call` / `tool_result` /
+`turn_complete` / `error`) back to the frontend. The frontend never contacts the sidecar directly.
+Conversation end (disconnect/idle) is signalled to the sidecar to finalize working memory; the
+stable (non-suffixed) conversation id is what lets a user navigate away and back and resume the
+same thread, until agent_kit's idle `ttl_s` expires it.
 
 ---
 
@@ -377,12 +426,21 @@ Computed from `applications` + `application_events`:
 - `GET/POST /api/applications`, `PATCH /api/applications/{id}` (stage transition), `POST
   /api/applications/{id}/submit`
 - `GET /api/analytics`
-- `GET /api/chat/models`, chat stream endpoint (SSE/WS), `POST /api/chat/model` (switch)
+- `GET /api/chat/models` (selectable-model list for the `AgentPanel` picker); `WS
+  /api/chat/ws/{conversation_id}` (proxy to the sidecar — see §6.5). Model switching is a WS frame
+  (`{"type": "set_model", "model": ...}`), not a separate REST endpoint — the proxy already
+  forwards arbitrary JSON frames with the trusted `user_id` injected (§6.4).
 - **Admin** (`role=admin`): `GET /api/admin/users`, `DELETE /api/admin/users/{id}`,
   `POST /api/admin/users/{id}/reset-password`, `POST /api/admin/users/{id}/disable`
 
 **Internal (`/internal/*`, requires `X-Internal-Secret`, `user_id` in body/params)** — the tool
-callbacks backing §6.2.
+callbacks and context feed backing §6.1/§6.2:
+- `POST /internal/context` `{user_id, conversation_id}` → `{context: str}` — backs
+  `system_prompt_fn` (§6.1).
+- `POST /internal/profile/update-section` `{user_id, section, value}` — backs
+  `update_profile_section`.
+- `POST /internal/profile/add-item` `{user_id, section, item}` — backs `add_profile_item` and
+  `record_clarification`.
 
 ---
 
@@ -425,14 +483,27 @@ callbacks backing §6.2.
   detail UI; editable parsed fields.
 - **Acceptance:** ✅ a normal URL parses; a blocked URL cleanly falls back to paste; fields editable.
 
-**M4 — Agent tools + clarifying-question loop**
-- Implement the §6.2 custom tools calling the internal API (shared secret, user_id-scoped); grant
-  defaults via `PermissionStore`; embed `good_resume.md` in the system prompt; chat UI streams
-  `TextDelta/ToolCallStarted/ToolResult/TurnComplete`; model picker wired to `set_conversation_model`.
-- Agent reads profile + jobs, asks gap-filling questions, writes enrichments via `record_clarification`.
-- **Acceptance:** in chat, the agent enriches the profile (new items appear in DB/UI); switching model
-  mid-chat works; user A's tools cannot touch user B's data; the sidecar/internal API reject calls
-  without the secret.
+**M4 — Contextual agent panels + profile-enrichment tools** ✅
+- Design pivot from the original spec (§6.0): no standalone chat tab — the agent is embedded as a
+  split-screen `AgentPanel` on the profile page and each job detail page.
+- New `backend/app/internal/` package: `POST /internal/context` (backs `system_prompt_fn`, injects
+  the profile — and job, in job mode — into the prompt every turn) and
+  `POST /internal/profile/{update-section,add-item}` (backs the three write tools), all gated by
+  `X-Internal-Secret` with explicit `user_id`.
+- `agent/tools/`: `update_profile_section`, `add_profile_item`, `record_clarification` — write-only,
+  no read tools (§6.1); registered via `AgentService.build(..., extra_tools=..., system_prompt_fn=...)`;
+  `docs/good_resume.md` embedded in the static system prompt.
+- Chat proxy namespaces conversation ids by `user_id`; `AgentPanel` renders `tool_call`/`tool_result`
+  frames inline, has a model picker (`GET /api/chat/models` + WS `set_model` frame — §6.4), and a
+  "new chat" button (generation-suffixed conversation id).
+- Profile page shows the master profile updating live next to the panel, with agent-touched
+  sections briefly highlighted; job detail page shows JD-gap-analysis chat plus an M5 artifact
+  placeholder.
+- **Acceptance:** ✅ in the profile panel, the agent enriches the profile (new items appear in
+  DB/UI, visible live without a manual reload); in the job panel it does gap analysis using
+  injected profile+job context (no read-tool round trips); switching model mid-conversation works;
+  user A's tools/context cannot touch user B's data (`backend/tests/test_internal.py`); the
+  internal API rejects calls without `X-Internal-Secret`.
 
 **M5 — CV generation + source editor + PDF preview**
 - `RenderCVModel` schema; `draft_cv` yields valid YAML; `rendercv render` → PDF + `.tex`; persist as
@@ -474,7 +545,8 @@ callbacks backing §6.2.
 1. Sign up (first user → **admin**).
 2. Upload a resume → confirm the parsed **master profile**.
 3. Add a job by URL; confirm the **paste fallback** path for a blocked URL.
-4. Chat: run the clarifying-question loop; **switch models** mid-conversation.
+4. Profile panel: run the clarifying-question loop and confirm enrichments appear live; open the
+   job detail panel and confirm JD-gap analysis; **switch models** mid-conversation in either panel.
 5. Generate a **CV** → edit the YAML → compile → preview the PDF.
 6. Generate a **cover letter** → edit → compile.
 7. Create and **submit** an application → finalized CV + cover letter are **snapshotted**.

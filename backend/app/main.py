@@ -12,6 +12,7 @@ from app.api.chat import router as chat_router
 from app.api.jobs import router as jobs_router
 from app.api.profile import router as profile_router
 from app.db.migrate import run_migrations
+from app.internal import router as internal_router
 from app.llm.client import build_llm
 
 # Attach our handlers to uvicorn's stream so `app.*` loggers surface in the
@@ -52,6 +53,7 @@ app.include_router(admin_router)
 app.include_router(chat_router)
 app.include_router(profile_router)
 app.include_router(jobs_router)
+app.include_router(internal_router)
 
 
 @app.get("/health")

@@ -540,9 +540,21 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   `agent-panel.tsx` (tight margins on `p`/`ul`/`ol`, styled `strong`/`code`/`a`) — the project has
   no `@tailwindcss/typography` plugin, and react-markdown's default HTML output carries
   full-document-sized block margins that look wrong in a narrow chat bubble.
-- **`npm audit` reports 2 moderate vulnerabilities in Next's own bundled `postcss`
-  (`node_modules/next/node_modules/postcss`) that predate all M4 frontend work** — confirmed via
-  `git stash` + re-running `npm audit` on the pre-M4 tree. `npm audit fix --force` wants to
-  downgrade `next` to `9.3.3` (a huge breaking change from Next 16), so this was deliberately left
-  alone rather than "fixed" destructively. Don't assume a future `npm audit` finding here was
-  introduced by whatever you're currently working on without checking history first.
+- **`npm audit`'s 2 moderate `postcss` vulnerabilities (pre-dating M4) were fixed via
+  `overrides`, not `npm audit fix --force`.** They were in `next`'s own bundled copy
+  (`node_modules/next/node_modules/postcss@8.4.31`) — `next@16.2.9`'s own `package.json` pins
+  `"postcss": "8.4.31"` as an **exact** version (no range), so plain `npm install`/dedupe can
+  never lift it to a patched version on its own, and `npm audit fix --force` only knew how to
+  "fix" it by downgrading `next` itself to `9.3.3` (a real breaking change — do not do this). The
+  correct fix, per this file's own security-philosophy rule ("use overrides to force patched
+  transitive deps"): add `"overrides": {"postcss": "^8.5.16"}` to `frontend/package.json` (must
+  match/be compatible with the existing direct `postcss` dependency's range — npm's `overrides`
+  validation rejects an override that conflicts with a direct dependency), then `npm install`.
+  This forces every nested `postcss` copy (including next's) to dedupe to the same patched
+  top-level instance — confirmed via `npm ls postcss` (no more nested copy at all) and a clean
+  `npm run build` afterward (Next's CSS/Turbopack pipeline is unaffected by the newer patch
+  version). `npm audit` now reports 0 vulnerabilities. **General lesson: before accepting
+  `npm audit fix --force`'s suggested resolution, check whether the vulnerable package is pinned
+  exactly by a parent dependency (`npm ls <pkg>`, or grep the parent's own `package.json`) — an
+  `overrides` entry is very often the non-destructive fix, especially for a mature, API-stable
+  tool like postcss where a transitive minor/patch bump is safe.**

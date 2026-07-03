@@ -38,6 +38,9 @@ class User(Base):
     profile: Mapped[Profile | None] = relationship(
         "Profile", back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    jobs: Mapped[list[Job]] = relationship(
+        "Job", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Session(Base):
@@ -87,3 +90,23 @@ class Profile(Base):
     )
 
     user: Mapped[User] = relationship("User", back_populates="profile")
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    raw_text: Mapped[str] = mapped_column(Text, nullable=False)
+    parsed: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="jobs")

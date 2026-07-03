@@ -199,3 +199,37 @@ class ProfileModelPart2(BaseModel):
     publications: list[PublicationItem] = Field(default_factory=list)
     extras: list[ExtrasItem] = Field(default_factory=list)
     enrichment: list[EnrichmentItem] = Field(default_factory=list)
+
+
+class JobModel(BaseModel):
+    """Structured extraction of a job posting — see ``parsing/jobs.py``.
+
+    Unlike ``ProfileModel``, every field here is a scalar string or a flat
+    ``list[str]`` — no nested list-of-object fields — so this has stayed under
+    Anthropic's structured-output grammar-size limit in a single ``llm.invoke()``
+    call (the M2 "compiled grammar is too large" 400 was traced specifically to
+    nested list-of-object fields like ``ExperienceItem``, not flat schemas). If a
+    future field addition makes this nested, re-bisect per the ``ProfileModel``
+    gotcha rather than assuming margin still exists.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra=_require(
+            "company", "title", "location", "responsibilities", "must_have",
+            "nice_to_have", "keywords", "why_opened_guess", "seniority",
+            "company_type", "team_name", "team_description",
+        )
+    )
+
+    company: str = ""
+    title: str = ""
+    location: str = ""
+    responsibilities: list[str] = Field(default_factory=list)  # what the role actually does
+    must_have: list[str] = Field(default_factory=list)
+    nice_to_have: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)  # skills/tools/terms for résumé-tailoring
+    why_opened_guess: str = ""
+    seniority: str = ""       # e.g. junior/mid/senior/staff/principal/lead/manager/director
+    company_type: str = ""    # e.g. startup/scaleup/enterprise/agency/nonprofit/government
+    team_name: str = ""       # specific hiring team, e.g. "Payments Platform" — "" if not stated
+    team_description: str = ""  # one-line team focus/mission — "" if not stated

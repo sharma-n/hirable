@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/profile", label: "Profile", icon: User },
-  { href: "/jobs", label: "Jobs", icon: Bookmark, disabled: true },
+  { href: "/jobs", label: "Jobs", icon: Bookmark },
   { href: "/documents", label: "Documents", icon: FileText, disabled: true },
   { href: "/analytics", label: "Analytics", icon: BarChart2, disabled: true },
 ];

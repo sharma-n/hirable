@@ -249,6 +249,69 @@ export async function apiUploadResume(file: File): Promise<Profile> {
   return res.json() as Promise<Profile>;
 }
 
+// ---- Jobs types -------------------------------------------------------------
+
+export interface JobData {
+  company: string;
+  title: string;
+  location: string;
+  responsibilities: string[];
+  must_have: string[];
+  nice_to_have: string[];
+  keywords: string[];
+  why_opened_guess: string;
+  seniority: string;
+  company_type: string;
+  team_name: string;
+  team_description: string;
+}
+
+export interface Job {
+  id: string;
+  user_id: string;
+  source_url: string | null;
+  raw_text: string;
+  parsed: JobData;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobCreateResult {
+  needs_paste: boolean;
+  job: Job | null;
+}
+
+// ---- Jobs API ---------------------------------------------------------------
+
+export async function apiListJobs(): Promise<Job[]> {
+  return apiFetch<Job[]>("/api/jobs");
+}
+
+export async function apiAddJob(body: {
+  url?: string;
+  raw_text?: string;
+}): Promise<JobCreateResult> {
+  return apiFetch<JobCreateResult>("/api/jobs", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function apiGetJob(jobId: string): Promise<Job> {
+  return apiFetch<Job>(`/api/jobs/${jobId}`);
+}
+
+export async function apiUpdateJob(jobId: string, data: JobData): Promise<Job> {
+  return apiFetch<Job>(`/api/jobs/${jobId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteJob(jobId: string): Promise<void> {
+  return apiFetch<void>(`/api/jobs/${jobId}`, { method: "DELETE" });
+}
+
 // ---- WebSocket chat -------------------------------------------------------
 
 export function openChatSocket(

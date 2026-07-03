@@ -415,15 +415,15 @@ callbacks backing §6.2.
 - **Acceptance:** ✅ two users isolated; admin delete cascades + invalidates sessions; 17/17 tests
   green; TypeScript clean; middleware-free route protection via server-component `cookies()`.
 
-**M2 — Resume upload → master profile**
+**M2 — Resume upload → master profile** ✅
 - Upload pdf/docx/tex → docling/text extraction → `response_model=ProfileModel` → `profiles` v1;
   full profile editor UI (every section editable; save bumps version).
-- **Acceptance:** sample pdf, docx, and tex each parse into a coherent, editable profile; edits persist.
+- **Acceptance:** ✅ sample pdf, docx, and tex each parse into a coherent, editable profile; edits persist.
 
-**M3 — Jobs shortlist**
+**M3 — Jobs shortlist** ✅
 - Add job by URL (trafilatura) with **paste fallback**; `response_model=JobModel`; shortlist list +
   detail UI; editable parsed fields.
-- **Acceptance:** a normal URL parses; a blocked URL cleanly falls back to paste; fields editable.
+- **Acceptance:** ✅ a normal URL parses; a blocked URL cleanly falls back to paste; fields editable.
 
 **M4 — Agent tools + clarifying-question loop**
 - Implement the §6.2 custom tools calling the internal API (shared secret, user_id-scoped); grant

@@ -34,8 +34,9 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0 and M1 are complete** (three-service
-skeleton + one-command setup; full auth + session management + admin console + UI redesign).
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M3 are complete** (three-service
+skeleton + one-command setup; full auth + session management + admin console + UI redesign;
+resume upload → master profile; job ingest by URL/paste → shortlist).
 
 ---
 
@@ -165,12 +166,14 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/auth/` | `password.py` (argon2), `sessions.py` (token lifecycle), `dependencies.py` (FastAPI guards) |
 | `backend/app/db/` | SQLAlchemy engine, Base, User + Session models, `create_all()` migration runner |
 | `backend/app/schemas.py` | Pydantic request/response schemas (`SignupRequest`, `UserOut`, …) |
-| `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD |
-| `backend/app/llm/` | `client.py` (build LLMClient from config), `deps.py` (FastAPI `get_llm` dep), `schemas.py` (ProfileModel) |
-| `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (LLM structured extraction) |
+| `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD, job ingest/CRUD/isolation/needs_paste |
+| `backend/app/llm/` | `client.py` (build LLMClient from config), `deps.py` (FastAPI `get_llm` dep), `schemas.py` (ProfileModel, JobModel) |
+| `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (resume LLM structured extraction), `jobs.py` (trafilatura fetch + job LLM structured extraction) |
 | `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
 | `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
+| `backend/app/api/jobs.py` | `POST /` (url/paste ingest + `needs_paste` signal), `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` — all scoped to `current_user` |
 | `frontend/app/(app)/profile/` | Resume dropzone + section-by-section profile editor (upload, edit, re-upload) |
+| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` detail/edit page |
 | `frontend/components/ui/textarea.tsx` | Native textarea with base-nova Tailwind styling |
 | `agent/bootstrap.py` | `create_app_from_yaml` wrapper + secret middleware + /health |
 | `frontend/app/(app)/` | Authenticated route group: chat, admin, profile (layout enforces session cookie) |
@@ -221,7 +224,7 @@ preferentially.
 | M0 — skeleton + chat round-trip | **Done** | Chat round-trip verified locally |
 | M1 — auth, sessions, admin | **Done** | argon2, httpOnly cookie sessions, first-user admin, admin console, full UI redesign (Tailwind v4 + shadcn base-nova, dark mode, app shell) |
 | M2 — resume upload → profile | **Done** | docling extraction, llm_kit structured parse, Resume+Profile DB models, section editor with useFieldArray, enrichment stub |
-| M3 — jobs shortlist | Pending | |
+| M3 — jobs shortlist | **Done** | trafilatura fetch+extract with `needs_paste` fallback signal; flat `JobModel` designed for a single `llm.invoke()` call (no Part1/Part2 split, unlike `ProfileModel`) — verified with mocked LLM in tests, **not yet confirmed against the real Anthropic API**; list+detail UI; no `shortlist_status`/no versioning by design (deferred to M7) |
 | M4 — agent tools + clarifying-question loop | Pending | Tool injection API TBD |
 | M5 — CV generation + editor + PDF | Pending | TinyTeX install deferred to here |
 | M6 — cover letter | Pending | |
@@ -295,6 +298,12 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 
 ## Gotchas encountered during M2
 
+- **DocumentConverter is expensive — initialize once at startup.** docling's model initialization
+  takes seconds and happens per-upload if done lazily. In `backend/app/main.py`, initialize
+  `DocumentConverter()` once in the FastAPI lifespan (`app.state.docling_converter = ...`),
+  inject via a FastAPI dependency (`app/parsing/deps.py`), and pass to extraction functions.
+  This matches the pattern already used for `LLMClient` — first resume upload is slow (one-time
+  model load), but subsequent uploads are fast.
 - **LLMClient is built once in FastAPI lifespan** (`app.state.llm = build_llm()`) and injected
   via `get_llm(request) → request.app.state.llm`. Tests override `get_llm` via
   `app.dependency_overrides[get_llm] = lambda: fake_llm` before creating `TestClient`. The
@@ -333,3 +342,42 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   split still has margin; the repro script pattern is: build ad hoc Pydantic models from subsets
   of the existing item classes, call `llm.invoke(response_model=candidate)` for each, and see
   which combinations 400.
+
+## Gotchas encountered during M3
+
+- **`JobModel` is intentionally flat** (scalar strings + `list[str]`, no nested list-of-object
+  fields) so it was designed to need only a single `llm.invoke(..., response_model=JobModel)`
+  call, unlike `ProfileModel`'s Part1/Part2 split. This has only been verified with a mocked
+  LLM in `test_jobs.py` (`fake_llm.invoke.call_count == 1`) — **it has not yet been confirmed
+  against the real Anthropic API**. If it 400s with "compiled grammar is too large" once
+  exercised for real, apply the exact same fix as `parse_resume()`: split into
+  `JobModelPart1`/`JobModelPart2`, call both concurrently via `asyncio.gather`, merge in Python.
+- **trafilatura's two-step API**: `trafilatura.fetch_url(url) -> str | None` (downloads HTML) then
+  `trafilatura.extract(html, url=...) -> str | None` (extracts main content) — either step can
+  independently return `None`/empty on a blocked or JS-rendered page. `fetch_job_text()` in
+  `backend/app/parsing/jobs.py` treats any failure in either step (or an unexpected exception) as
+  `None`, never raises, and never needs a separate readability library — trafilatura's `extract()`
+  already has its own fallback extraction built in.
+- **The `needs_paste` signal is a `200` with a discriminated envelope, not an error.**
+  `POST /api/jobs` returns `JobCreateResult {needs_paste: bool, job: JobOut | None}`. A blocked/
+  empty fetch is an expected branch of the ingest flow (most job boards block bots), so it must
+  not be a 4xx — `frontend/lib/api.ts`'s `apiFetch` treats non-2xx as an error and throws, which
+  would incorrectly surface a toast instead of prompting the paste fallback.
+- **Client-supplied `raw_text` always bypasses the fetch step, even when `url` is also present.**
+  This is what makes the two-step paste-fallback flow work: `{url}` → `needs_paste: true` →
+  `{url, raw_text}` (same URL, now with pasted text) → the presence of `raw_text` skips
+  `fetch_job_text` entirely. `frontend/app/(app)/jobs/page.tsx` relies on this — it keeps the
+  original `url` around when showing the paste textarea so the resubmit includes both.
+- **No per-user file storage for jobs**, unlike `resumes`. `raw_text` (fetched or pasted) lives
+  directly in the `jobs.raw_text` column — no `app/files.py` involvement, nothing to clean up on
+  job delete beyond the ORM row itself. `User.jobs` cascade (`cascade="all, delete-orphan"`)
+  handles user-delete cleanup automatically, same as `sessions`/`resumes` — confirmed by reading
+  `admin.py`'s `delete_user`, which relies purely on ORM cascade (plus a manual
+  `delete_user_uploads` call for on-disk files, which jobs don't have).
+- **`jobs.updated_at` was added beyond SPEC §7's literal column list**, for parity with
+  `profiles.updated_at` (both are user-edited-and-resaved rows). **`shortlist_status` was
+  intentionally omitted** — the user explicitly deferred any triage/staging concept to M7's
+  application-stage tracking. `JobModel` also has two fields beyond SPEC §8.2's literal list,
+  added at the user's request: `responsibilities[]` (what the role *does*, distinct from
+  `must_have`/`nice_to_have` which describe candidate requirements) and `team_name`/
+  `team_description` (the specific hiring team, distinct from `company`/`company_type`).

@@ -1,0 +1,83 @@
+cv:
+  name: "Priya Patel"
+  headline: "Senior Data Scientist, Growth & Experimentation"
+  location: "Seattle, WA"
+  email: "priya.patel@example.com"
+  phone: "+14155552672"
+  website: "https://priyapatel.dev"
+  social_networks:
+    - network: "GitHub"
+      username: "priya-stats-ml"
+    - network: "LinkedIn"
+      username: "priyapatel-ds"
+  sections:
+    summary:
+      - "6-year track record in A/B testing, causal inference, and experimentation platforms driving 8-figure revenue impact. Expert in designing statistically rigorous experiments and translating insights into product decisions for consumer-facing platforms."
+    experience:
+      - company: "Meta"
+        position: "Senior Data Scientist"
+        start_date: 2021-07
+        end_date: "present"
+        location: "Menlo Park, CA"
+        summary: "Lead statistician and metrics architect for Instagram Reels growth team."
+        highlights:
+          - "Designed and executed 150+ A/B tests yearly (power=0.8, FWER-controlled via sequential testing), enabling 23% YoY engagement lift"
+          - "Built in-house causal inference platform (Python/Pandas) automating propensity score matching and CATE estimation; reduced analysis time 60%"
+          - "Spearheaded organization-wide adoption of variance reduction techniques; improved experiment sensitivity 35% via covariate adjustment"
+      - company: "Spotify"
+        position: "Data Scientist, Analytics"
+        start_date: 2019-02
+        end_date: 2021-06
+        location: "Stockholm, Sweden"
+        summary: "Monetization analytics and subscription funnel optimization."
+        highlights:
+          - "Analyzed 2.5B user events/day; identified and fixed critical billing bug costing $8M/quarter in lost revenue"
+          - "Modeled user lifetime value (Bayesian hierarchical regression in Stan) to optimize paid acquisition budgets; achieved 18% lower CAC"
+          - "Peer-reviewed 300+ analyses for statistical validity, establishing org standards for reproducible ML pipelines"
+      - company: "Airbnb"
+        position: "Data Scientist"
+        start_date: 2017-06
+        end_date: 2019-01
+        location: "San Francisco, CA"
+        summary: "Search ranking personalization and marketplace dynamics."
+        highlights:
+          - "Trained learning-to-rank model (gradient boosting) on 10B+ search interactions; improved booking rate 4.2%"
+          - "Conducted price elasticity study across 50+ geographic markets; quantified demand sensitivity for dynamic pricing optimization"
+    projects:
+      - name: "Causal ML Workshop Series"
+        start_date: 2023-01
+        end_date: 2023-09
+        location: "Personal"
+        summary: "Created and delivered 4-part workshop on modern causal inference techniques."
+        highlights:
+          - "Covered doubly robust estimation, CATE methods, and instrumental variables; attended by 200+ data scientists across Meta"
+      - name: "Open-source Power Analysis Tool"
+        date: "2020-2021"
+        location: "GitHub"
+        summary: "Statsmodels-compatible library for experiment design power calculations."
+        highlights:
+          - "Supports sequential testing, Bayesian updates, and variance reduction; adopted by 3 major tech companies"
+    education:
+      - institution: "Stanford University"
+        area: "Statistics"
+        degree: "M.S."
+        start_date: 2015-09
+        end_date: 2017-05
+        highlights:
+          - "Focus on experimental design and causal inference (GPA 3.9)"
+      - institution: "UC Berkeley"
+        area: "Mathematics & Economics (Double Major)"
+        degree: "B.A."
+        start_date: 2011-09
+        end_date: 2015-05
+        highlights:
+          - "Cum Laude, Regents' Scholar"
+    skills:
+      - label: "Statistics & Methods"
+        details: "A/B testing, causal inference, experimental design, Bayesian methods, power analysis, propensity score matching"
+      - label: "Data Tools"
+        details: "Python (Pandas, NumPy, Scikit-learn), R, SQL, Tableau, Spark, Airflow, dbt"
+      - label: "Domains"
+        details: "Marketplace metrics, user economics, funnel optimization, pricing strategy"
+design:
+  theme: engineeringresumes

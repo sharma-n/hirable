@@ -1,0 +1,84 @@
+cv:
+  name: "Alex Chen"
+  headline: "Senior Embedded Systems Engineer"
+  location: "San Jose, CA"
+  email: "alex.chen@example.com"
+  phone: "+14155552671"
+  website: "https://alexchen.dev"
+  social_networks:
+    - network: "GitHub"
+      username: "alex-chen-embedded"
+    - network: "LinkedIn"
+      username: "alexchen-hw"
+  sections:
+    summary:
+      - "Specialist in low-level firmware and hardware-software integration with 8+ years optimizing embedded systems for performance-critical applications. Shipped production firmware for automotive infotainment, medical devices, and IoT platforms."
+    experience:
+      - company: "Tesla Energy"
+        position: "Staff Firmware Engineer"
+        start_date: 2022-03
+        end_date: "present"
+        location: "Palo Alto, CA"
+        summary: "Led firmware team for battery management systems across Powerwall and grid-scale products."
+        highlights:
+          - "Architected real-time BMS firmware in C (STM32/ARM Cortex-M7) handling 500+ concurrent sensor reads, achieving <2ms latency SLA"
+          - "Reduced production flash usage by 35% through RTOS optimization (FreeRTOS) and memory-mapped I/O refactoring"
+          - "Mentored 4 junior engineers on safety-critical coding standards (IEC 61508 SIL-2)"
+      - company: "Qualcomm"
+        position: "Senior Embedded Software Engineer"
+        start_date: 2018-06
+        end_date: 2022-02
+        location: "San Diego, CA"
+        summary: "Owned modem firmware stack for 5G chipsets serving 200M+ devices globally."
+        highlights:
+          - "Debugged and fixed critical RF calibration bugs affecting signal quality in Snapdragon X50, unblocking $1.2B carrier revenue"
+          - "Rewrote NEON SIMD DSP kernels in ARM assembly, achieving 40% speedup in baseband processing"
+          - "Established automated regression test suite (Python/pytest) reducing post-silicon debug time from 6 weeks to 2 weeks"
+      - company: "Broadcom"
+        position: "Firmware Engineer"
+        start_date: 2015-01
+        end_date: 2018-05
+        location: "Irvine, CA"
+        summary: "Developed NIC and storage controller firmware."
+        highlights:
+          - "Implemented PCIe error recovery and DMA flow control logic, certified for hyperscale data center deployments"
+          - "Designed FPGA testbench in Verilog (simulating PCI load scenarios) to validate firmware correctness pre-silicon"
+    projects:
+      - name: "RTOS Task Scheduler Optimization"
+        start_date: 2023-06
+        end_date: 2023-11
+        location: "Personal"
+        summary: "Open-source FreeRTOS enhancement for real-time priority inheritance."
+        highlights:
+          - "Implemented priority ceiling protocol to eliminate priority inversion, tested on ARM Cortex-M platforms"
+          - "Published conference paper at EMSOFT 2024; gained 200+ GitHub stars"
+      - name: "USB 3.1 Host Controller Driver"
+        date: "2017"
+        location: "Broadcom"
+        summary: "High-speed data transfer driver for storage devices."
+        highlights:
+          - "Achieved 400MB/s throughput using scatter-gather DMA, passed USB-IF compliance suite"
+    education:
+      - institution: "UC San Diego"
+        area: "Computer Engineering"
+        degree: "M.S."
+        start_date: 2013-09
+        end_date: 2015-05
+        highlights:
+          - "Thesis: 'Adaptive Task Scheduling in Heterogeneous MPSoCs' (GPA 3.8)"
+      - institution: "University of Michigan"
+        area: "Electrical Engineering"
+        degree: "B.S."
+        start_date: 2009-09
+        end_date: 2013-05
+        highlights:
+          - "Summa Cum Laude, IEEE Student Award"
+    skills:
+      - label: "Languages"
+        details: "C, C++, Assembly (ARM/x86), Verilog, Python, Rust"
+      - label: "Platforms & Tools"
+        details: "ARM Cortex (M/A series), RISC-V, FreeRTOS, AUTOSAR, Jira, Git, GDB, QEMU"
+      - label: "Domains"
+        details: "Firmware, RTOS, Device Drivers, DSP, Power Management, Thermal Optimization"
+design:
+  theme: engineeringresumes

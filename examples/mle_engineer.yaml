@@ -1,0 +1,86 @@
+cv:
+  name: "Jordan Kim"
+  headline: "Staff Machine Learning Engineer, Infrastructure & Scale"
+  location: "Mountain View, CA"
+  email: "jordan.kim@example.com"
+  phone: "+14155552673"
+  website: "https://jordankim.dev"
+  social_networks:
+    - network: "GitHub"
+      username: "jordan-mlops"
+    - network: "StackOverflow"
+      username: "9876543/jordankim-ml"
+  sections:
+    summary:
+      - "9+ years building production ML systems handling petabyte-scale inference. Specialist in feature stores, model serving infrastructure, MLOps, and cost optimization for real-time and batch ML workloads. Led teams shipping ML platforms serving 100M+ daily users."
+    experience:
+      - company: "Google Cloud"
+        position: "Staff ML Engineer"
+        start_date: 2021-08
+        end_date: "present"
+        location: "Mountain View, CA"
+        summary: "Architect of Vertex AI Feature Store and real-time inference orchestration."
+        highlights:
+          - "Designed and implemented distributed feature materialization system (Beam/Dataflow) serving 5TB+ feature cache to 500K QPS inference endpoints; achieved <100ms p99 latency"
+          - "Led cross-functional effort to reduce model serving infrastructure costs by 42% via batch prediction optimization and heterogeneous GPU scheduling"
+          - "Mentored 8 engineers on production ML best practices; established org-wide standards for experiment tracking and model governance"
+      - company: "Lyft"
+        position: "Senior Machine Learning Engineer"
+        start_date: 2019-02
+        end_date: 2021-07
+        location: "San Francisco, CA"
+        summary: "ML platform team; built infrastructure for ride demand forecasting and driver matching."
+        highlights:
+          - "Architected real-time feature pipeline (Kafka/Flink) aggregating 100K events/sec; reduced model staleness from 1h to 5min, improving forecast RMSE 18%"
+          - "Designed A/B testing framework for ML model changes (multi-armed bandit + contextual bandits); enabled safe deployment of 50+ model updates/week"
+          - "Led cost reduction initiative for GPU cluster; implemented dynamic batching and model quantization, saving $2.1M annually"
+      - company: "Uber"
+        position: "Machine Learning Engineer"
+        start_date: 2016-06
+        end_date: 2019-01
+        location: "San Francisco, CA"
+        summary: "Built ML models for marketplace dynamics and ETA prediction."
+        highlights:
+          - "Trained ensemble demand prediction models (XGBoost + gradient boosting) on 10B+ historical trips; reduced ETA prediction error by 25%"
+          - "Implemented micro-batching inference service (TensorFlow Serving) on Kubernetes, handling 10K requests/sec with <50ms latency"
+          - "Mentored junior engineers on ML debugging; created internal playbook adopted across 15+ teams"
+    projects:
+      - name: "Open-source Model Registry CLI"
+        start_date: 2022-09
+        end_date: 2023-02
+        location: "Personal"
+        summary: "Git-like version control and governance tool for ML models."
+        highlights:
+          - "Integrates with MLflow, DVC, and custom registries; 1K+ GitHub stars, used by 5+ companies at scale"
+      - name: "ML Cost Attribution Engine"
+        date: "2020-2021"
+        location: "Lyft"
+        summary: "Automated billing system for ML compute across teams."
+        highlights:
+          - "Built cost allocation model using Kubernetes metrics and spot pricing APIs; enabled org to track ML spend down to individual models"
+    education:
+      - institution: "Carnegie Mellon University"
+        area: "Computer Science (Machine Learning)"
+        degree: "M.S."
+        start_date: 2014-09
+        end_date: 2016-05
+        highlights:
+          - "Thesis: 'Distributed Optimization for Large-scale Collaborative Filtering' (GPA 3.85)"
+      - institution: "University of Washington"
+        area: "Computer Science & Applied Mathematics (Double Major)"
+        degree: "B.S."
+        start_date: 2010-09
+        end_date: 2014-05
+        highlights:
+          - "Magna Cum Laude, Dean's List 4 years"
+    skills:
+      - label: "ML Frameworks & Tools"
+        details: "TensorFlow, PyTorch, XGBoost, LightGBM, MLflow, Kubeflow, Airflow, Ray Tune"
+      - label: "Infrastructure"
+        details: "Kubernetes, Docker, Spark, Dataflow, Kafka, Redis, gRPC, TensorFlow Serving"
+      - label: "Languages"
+        details: "Python, Go, SQL, Scala, Bash"
+      - label: "Specializations"
+        details: "Feature stores, real-time inference, model serving, MLOps, cost optimization, distributed systems"
+design:
+  theme: engineeringresumes

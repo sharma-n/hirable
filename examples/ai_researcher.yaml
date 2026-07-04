@@ -1,0 +1,98 @@
+cv:
+  name: "Dr. Sarah Chen"
+  headline: "AI Research Scientist, Multimodal & Efficient LLMs"
+  location: "Berkeley, CA"
+  email: "sarah.chen@example.com"
+  phone: "+14155552674"
+  website: "https://sarahchenai.com"
+  social_networks:
+    - network: "GitHub"
+      username: "sarahchen-ai-research"
+    - network: "LinkedIn"
+      username: "sarahchen-researcher"
+  sections:
+    summary:
+      - "PhD in Machine Learning with 7 years research experience in large language models, efficient training, and multimodal architectures. Published 15+ papers at top-tier venues (NeurIPS, ICML, ICLR). Currently leading research on parameter-efficient fine-tuning and inference optimization for billion-parameter models."
+    experience:
+      - company: "Anthropic"
+        position: "Research Scientist"
+        start_date: 2023-01
+        end_date: "present"
+        location: "San Francisco, CA"
+        summary: "Core research team working on Constitutional AI and alignment."
+        highlights:
+          - "Led research on efficient instruction-tuning methods for LLMs; published method reducing training compute 3x while maintaining 99% of original performance"
+          - "Designed and conducted experiments on model interpretability and mechanistic interpretability; identified key attention patterns involved in reasoning"
+          - "Collaborated with safety team on adversarial robustness; improved adversarial attack detection accuracy from 72% to 91%"
+      - company: "OpenAI"
+        position: "Senior Research Scientist"
+        start_date: 2021-06
+        end_date: 2022-12
+        location: "San Francisco, CA"
+        summary: "Contributed to scaling laws research and efficient transformer architectures."
+        highlights:
+          - "Co-authored papers on scaling laws for transformer models (11.2K citations); directly informed GPT-4 training strategy"
+          - "Designed sparse attention mechanisms reducing compute by 40% while maintaining downstream task performance within 1%"
+          - "Led collaboration with DeepMind on vision-language pretraining; published ICLR 2022 paper on multimodal scaling laws"
+      - company: "UC Berkeley (BAIR Lab)"
+        position: "Postdoctoral Researcher"
+        start_date: 2020-09
+        end_date: 2021-05
+        location: "Berkeley, CA"
+        summary: "Worked on self-supervised learning and representation learning."
+        highlights:
+          - "Developed contrastive learning method beating SOTA on ImageNet by 2.3% at reduced compute; gained 8K+ citations on arXiv"
+          - "Mentored 3 PhD students; co-authored 2 papers that became widely adopted in industry"
+    projects:
+      - name: "Efficient LoRA Fine-tuning Framework"
+        start_date: 2022-06
+        end_date: 2023-03
+        location: "OpenAI"
+        summary: "Open-source library for parameter-efficient fine-tuning of LLMs."
+        highlights:
+          - "Reduces fine-tuning memory footprint by 90% while matching full fine-tuning on 5 downstream tasks"
+          - "Adopted by Hugging Face; integrated into Transformers library, serving 100K+ monthly downloads"
+    education:
+      - institution: "Stanford University"
+        area: "Computer Science"
+        degree: "Ph.D."
+        start_date: 2016-09
+        end_date: 2020-08
+        highlights:
+          - "Dissertation: 'Scaling Laws and Efficient Architectures for Large Language Models' (Advisor: Prof. Christopher Manning, GPA 3.96)"
+          - "Stanford Prize for Outstanding Graduate Dissertation; published 6 papers during PhD"
+      - institution: "MIT"
+        area: "Electrical Engineering & Computer Science"
+        degree: "B.S."
+        start_date: 2012-09
+        end_date: 2016-05
+        highlights:
+          - "Summa Cum Laude, Phi Beta Kappa, MIT Fellowship"
+    publications:
+      - title: "Scaling Laws for Transfer in Large Language Models"
+        authors: ["Sarah Chen*", "Tom Brown", "Benjamin Mann"]
+        journal: "arXiv preprint"
+        date: 2023-11
+        url: "https://arxiv.org/abs/2308.12345"
+        summary: "Empirical study of transfer learning efficiency in 7B-70B parameter models; shows 3x compute reduction possible via parameter sharing."
+      - title: "Efficient Multimodal Transformers via Sparse Attention"
+        authors: ["Sarah Chen*", "Jiasen Lu"]
+        journal: "International Conference on Learning Representations (ICLR)"
+        date: 2023-05
+        summary: "Novel sparse attention pattern reducing quadratic attention to linear, maintaining 99% downstream performance."
+      - title: "Constitutional AI for Model Alignment"
+        authors: ["Yuntao Bai", "Sarah Chen", "Amirhossein Kahandal"]
+        journal: "Advances in Neural Information Processing Systems (NeurIPS)"
+        date: 2022-12
+        summary: "Framework for aligning LLMs via constitutional principles; published at NeurIPS 2022."
+    skills:
+      - label: "Deep Learning & LLMs"
+        details: "Transformers, attention mechanisms, fine-tuning, RLHF, prompt engineering, zero-shot learning"
+      - label: "Research Methods"
+        details: "Experimental design, ablation studies, statistical analysis, scaling laws, interpretability"
+      - label: "Tools & Languages"
+        details: "PyTorch, JAX, TensorFlow, Python, CUDA, Weights & Biases, Hugging Face Transformers"
+      - label: "Domains"
+        details: "Language models, multimodal learning, efficient training, model compression, alignment"
+design:
+  theme: engineeringresumes

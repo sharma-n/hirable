@@ -19,10 +19,15 @@ Rules:
 - experience[].position: job title. experience[].company: employer name.
 - experience[].highlights: each bullet point as a separate string, without leading dashes or asterisks.
 - experience[].tech: technology/tool names explicitly mentioned in that entry.
-- experience[].start_date / end_date: use "YYYY-MM" format if month is available, "YYYY" otherwise. Use "present" for current roles. Use date (free-form) only when a range cannot be parsed.
 - projects[].highlights: bullet points. projects[].tech: tech stack.
 - education[].area: field of study. education[].degree: degree level (B.S., M.S., PhD, etc.).
 - education[].highlights: notable achievements, GPA, honours, coursework.
+- start_date / end_date (experience, projects, and education alike): ALWAYS convert to
+  "YYYY-MM" if a month is available, "YYYY" otherwise — never copy the resume's original
+  wording. E.g. "Feb 2024" -> "2024-02", "July 2025" -> "2025-07", "Summer 2021" -> "2021".
+  Use "present" (lowercase) for current roles/ongoing entries, never "Present" or "Current".
+  Use date (free-form) instead of start_date/end_date only when no date range can be parsed
+  at all (e.g. a single undated year range spanning text).
 - skills: list of {label, details} pairs — group related skills (e.g. label="Languages" details="Python, Go, TypeScript").
 - publications: extract any papers, articles, or books with title, authors, journal, doi, url, date.
 - extras: use for patents, talks, awards, certifications, volunteering, interests. Each entry has title and highlights list.

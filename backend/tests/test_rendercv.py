@@ -175,6 +175,43 @@ class TestBuildRenderCVYaml:
         assert entry["date"] == "2022 - present"
         assert "start_date" not in entry
 
+    def test_prose_dates_normalized_to_strict_format(self):
+        # The resume-parsing LLM sometimes copies the source PDF's prose
+        # wording ("Feb 2024") straight into start_date/end_date instead of
+        # converting it — build.py must normalize this itself rather than
+        # handing RenderCV a value its strict validator will reject.
+        profile = {
+            **_PROFILE,
+            "experience": [
+                {
+                    **_PROFILE["experience"][0],
+                    "start_date": "Feb 2024",
+                    "end_date": "Present",
+                }
+            ],
+        }
+        tailored = _tailored(experience=[TailoredExperienceEntry(index=0, summary="s", highlights=["h"])])
+        text = build_rendercv_yaml(profile, tailored, _JOB, "engineeringresumes")
+        entry = yaml.safe_load(text)["cv"]["sections"]["Experience"][0]
+        assert entry["start_date"] == "2024-02"
+        assert entry["end_date"] == "present"
+
+    def test_unparseable_start_date_falls_back_to_free_form_date(self):
+        # If start_date can't be confidently normalized at all, it must be
+        # demoted to the free-form `date` field rather than passed through —
+        # RenderCV accepts arbitrary text there but rejects it in start_date.
+        profile = {
+            **_PROFILE,
+            "experience": [
+                {**_PROFILE["experience"][0], "start_date": "Sometime in college", "end_date": ""}
+            ],
+        }
+        tailored = _tailored(experience=[TailoredExperienceEntry(index=0, summary="s", highlights=["h"])])
+        text = build_rendercv_yaml(profile, tailored, _JOB, "engineeringresumes")
+        entry = yaml.safe_load(text)["cv"]["sections"]["Experience"][0]
+        assert entry["date"] == "Sometime in college"
+        assert "start_date" not in entry
+
     def test_empty_sections_omitted(self):
         # Projects/publications/extras are presence-based → empty means omitted.
         # Education is always-include, so it is NOT omitted here (see its own test).

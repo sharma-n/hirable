@@ -16,6 +16,17 @@ from app.llm.schemas import TailoredCV
 _PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")  # E.164
 _YEAR_RE = re.compile(r"(19|20)\d{2}")  # first 4-digit 19xx/20xx year in a date string
 _ONGOING = {"", "present", "current", "now", "ongoing", "till date", "to date"}
+_STRICT_DATE_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")  # RenderCV's start/end_date formats
+_MONTH_NAMES = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_MONTH_YEAR_RE = re.compile(r"^([A-Za-z]+)\.?[,\s]+(\d{4})$")  # "Feb 2024", "July, 2025"
+_YEAR_MONTH_RE = re.compile(r"^(\d{4})[,\s]+([A-Za-z]+)\.?$")  # "2024 Feb"
+_NUMERIC_MY_RE = re.compile(r"^(\d{1,2})[/-](\d{4})$")  # "07/2025", "07-2025"
+_NUMERIC_YM_RE = re.compile(r"^(\d{4})[/-](\d{1,2})$")  # "2025/07", "2025-07" (already strict, kept for symmetry)
 # A role ending within this many years is "recent" and is never dropped, even if
 # the LLM marked include=False — a server-side floor over the LLM's decision.
 _RECENT_YEARS = 5
@@ -29,14 +40,62 @@ _KNOWN_SOCIAL_NETWORKS = {
 _MAX_BOLD_KEYWORDS = 15
 
 
+def _normalize_date(value: str) -> str:
+    """Best-effort conversion of a resume-extracted date string into RenderCV's
+    strict start_date/end_date format (YYYY-MM-DD, YYYY-MM, or YYYY, or
+    "present"). Source PDFs write dates in prose ("Feb 2024", "July, 2025"),
+    and the resume-parsing LLM sometimes copies that prose verbatim into
+    start_date/end_date instead of converting it — this is a deterministic
+    safety net so that drift doesn't surface as an opaque RenderCV compile
+    error. Returns "" if the value can't be confidently normalized; callers
+    should fall back to RenderCV's free-form `date` field in that case, since
+    `date` (unlike start_date/end_date) accepts arbitrary text."""
+    v = value.strip()
+    if not v:
+        return ""
+    low = v.lower()
+    if low in _ONGOING:
+        return "present"
+    if _STRICT_DATE_RE.match(v):
+        return v
+    for pattern, month_group, year_group in (
+        (_MONTH_YEAR_RE, 1, 2),
+        (_YEAR_MONTH_RE, 2, 1),
+    ):
+        match = pattern.match(v)
+        if match:
+            month = _MONTH_NAMES.get(match.group(month_group).lower())
+            if month:
+                return f"{match.group(year_group)}-{month:02d}"
+    for pattern, month_group, year_group in (
+        (_NUMERIC_MY_RE, 1, 2),
+        (_NUMERIC_YM_RE, 2, 1),
+    ):
+        match = pattern.match(v)
+        if match and 1 <= int(match.group(month_group)) <= 12:
+            return f"{match.group(year_group)}-{int(match.group(month_group)):02d}"
+    return ""
+
+
 def _dates(item: dict) -> dict:
     """RenderCV's date/start_date/end_date are mutually exclusive; prefer the
-    structured range when present, falling back to the free-form date."""
-    if item.get("start_date"):
-        out = {"start_date": item["start_date"]}
-        if item.get("end_date"):
-            out["end_date"] = item["end_date"]
-        return out
+    structured range when present, falling back to the free-form date. Both
+    ends of the range are run through ``_normalize_date`` first — if
+    start_date can't be confidently normalized, the raw text is demoted to
+    the free-form `date` field instead of being passed through, since
+    RenderCV's start_date/end_date validation is strict and `date` is not."""
+    raw_start = str(item.get("start_date") or "").strip()
+    if raw_start:
+        start = _normalize_date(raw_start)
+        if start:
+            out = {"start_date": start}
+            raw_end = str(item.get("end_date") or "").strip()
+            end = _normalize_date(raw_end) if raw_end else ""
+            if end:
+                out["end_date"] = end
+            return out
+        raw_end = str(item.get("end_date") or "").strip()
+        return {"date": f"{raw_start} – {raw_end}" if raw_end else raw_start}
     if item.get("date"):
         return {"date": item["date"]}
     return {}

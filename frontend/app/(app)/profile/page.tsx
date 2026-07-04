@@ -1137,7 +1137,7 @@ function Dropzone({
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             {uploading
-              ? "This may take a few seconds."
+              ? "This may take a few minutes."
               : "Drag & drop or click to browse. Accepts PDF, DOCX, and TeX."}
           </p>
         </div>

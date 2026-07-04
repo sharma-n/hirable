@@ -198,7 +198,7 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/schemas.py` | Pydantic request/response schemas (`SignupRequest`, `UserOut`, …) |
 | `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD, job ingest/CRUD/isolation/needs_paste, internal API secret+context+isolation |
 | `backend/app/llm/` | `client.py` (build LLMClient from config), `deps.py` (FastAPI `get_llm` dep), `schemas.py` (ProfileModel, JobModel) |
-| `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (resume LLM structured extraction), `jobs.py` (trafilatura fetch + job LLM structured extraction) |
+| `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (resume LLM structured extraction), `jobs.py` (trafilatura fetch + job LLM structured extraction); `deps.py` deleted (docling converter no longer injected via FastAPI) |
 | `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
 | `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
 | `backend/app/api/jobs.py` | `POST /` (url/paste ingest + `needs_paste` signal), `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` — all scoped to `current_user` |
@@ -338,12 +338,11 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 
 ## Gotchas encountered during M2
 
-- **DocumentConverter is expensive — initialize once at startup.** docling's model initialization
-  takes seconds and happens per-upload if done lazily. In `backend/app/main.py`, initialize
-  `DocumentConverter()` once in the FastAPI lifespan (`app.state.docling_converter = ...`),
-  inject via a FastAPI dependency (`app/parsing/deps.py`), and pass to extraction functions.
-  This matches the pattern already used for `LLMClient` — first resume upload is slow (one-time
-  model load), but subsequent uploads are fast.
+- **DocumentConverter is instantiated fresh per upload.** docling's model initialization
+  takes seconds, so each resume upload pays that cost. Since resume uploads are expected only
+  once per account (at signup), it's not worth keeping the model resident in memory for the
+  process's entire lifetime. A `DocumentConverter()` is constructed fresh in
+  `backend/app/parsing/extract.py`'s `_extract_with_docling()` on each call.
 - **LLMClient is built once in FastAPI lifespan** (`app.state.llm = build_llm()`) and injected
   via `get_llm(request) → request.app.state.llm`. Tests override `get_llm` via
   `app.dependency_overrides[get_llm] = lambda: fake_llm` before creating `TestClient`. The

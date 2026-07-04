@@ -30,25 +30,24 @@ def _strip_latex(text: str) -> str:
     return text.strip()
 
 
-def _extract_with_docling(data: bytes, fmt: str, converter) -> str:
+def _extract_with_docling(data: bytes, fmt: str) -> str:
     """Convert PDF/DOCX bytes to markdown via docling.
 
-    Feeds docling an in-memory ``DocumentStream`` (no temp file) and reuses the
-    pre-initialized ``DocumentConverter`` to avoid reinitializing heavy models
-    on every call.
+    Feeds docling an in-memory ``DocumentStream`` (no temp file).
     """
     from docling.datamodel.base_models import DocumentStream
+    from docling.document_converter import DocumentConverter
 
+    converter = DocumentConverter()
     source = DocumentStream(name=f"resume.{fmt}", stream=io.BytesIO(data))
     result = converter.convert(source)
     return result.document.export_to_markdown()
 
 
-def extract_text(data: bytes, fmt: str, converter) -> str:
+def extract_text(data: bytes, fmt: str) -> str:
     """Return plain/markdown text from resume bytes.
 
     fmt: 'pdf' | 'docx' | 'tex'
-    converter: DocumentConverter instance (singleton, shared across all uploads)
     Raises HTTPException on unsupported format, oversized file, or conversion failure.
     """
     if len(data) > _MAX_UPLOAD_BYTES:
@@ -71,7 +70,7 @@ def extract_text(data: bytes, fmt: str, converter) -> str:
         raise HTTPException(status_code=500, detail="docling not installed") from exc
 
     try:
-        text = _extract_with_docling(data, fmt, converter)
+        text = _extract_with_docling(data, fmt)
     except Exception as exc:
         # Log full traceback so the server terminal shows what actually went wrong.
         logger.exception("Text extraction failed for %s", fmt.upper())

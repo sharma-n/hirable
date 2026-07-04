@@ -14,7 +14,6 @@ from app.db.profile_history import snapshot_profile
 from app.files import delete_user_uploads, save_upload
 from app.llm.deps import get_llm
 from app.llm.schemas import ProfileModel
-from app.parsing.deps import get_docling_converter
 from app.parsing.extract import extract_text
 from app.parsing.profile import parse_resume
 from app.schemas import ProfileOut, ProfileVersionOut, ResumeOut
@@ -36,7 +35,6 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
     llm: LLMClient = Depends(get_llm),
-    converter=Depends(get_docling_converter),
 ) -> Profile:
     ext = _ext(file.filename or "")
     if ext not in _ALLOWED_EXTENSIONS:
@@ -61,7 +59,7 @@ async def upload_resume(
     )
 
     # Stage 1 — extract raw text (docling for pdf/docx, strip for tex).
-    raw_text = extract_text(data, ext, converter)
+    raw_text = extract_text(data, ext)
     logger.info(
         "resume text extracted: user=%s chars=%d [%dms]",
         user.id, len(raw_text), _elapsed_ms(),

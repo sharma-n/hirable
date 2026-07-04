@@ -31,8 +31,6 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     run_migrations()
     app.state.llm = build_llm()
-    from docling.document_converter import DocumentConverter
-    app.state.docling_converter = DocumentConverter()
     try:
         yield
     finally:

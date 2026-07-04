@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from tools.context import build_system_prompt_fn
+from tools.documents import draft_cv_tool
 from tools.profile import (
     add_profile_item_tool,
     record_clarification_tool,
@@ -165,6 +166,66 @@ class TestRecordClarificationTool:
         tool = record_clarification_tool(client)
         result = await tool.handler("user-1", {"key": "k", "value": "v"})
         assert "hasn't uploaded a resume" in result
+
+
+@pytest.mark.asyncio
+class TestDraftCvTool:
+    async def test_success_returns_version_confirmation(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["url"] = str(request.url)
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"document_id": "doc-1", "version": 3})
+
+        client = _client_with_handler(handler)
+        tool = draft_cv_tool(client)
+        result = await tool.handler(
+            "user-1", {"job_id": "job-1", "instructions": "focus on Go"}
+        )
+
+        assert seen["url"] == "http://backend:8000/internal/documents/draft-cv"
+        assert seen["body"] == {
+            "user_id": "user-1",
+            "job_id": "job-1",
+            "instructions": "focus on Go",
+        }
+        assert "Draft CV v3 created" in result
+
+    async def test_missing_job_id_returns_error_without_http_call(self):
+        client = _client_with_handler(lambda r: httpx.Response(500))
+        tool = draft_cv_tool(client)
+        result = await tool.handler("user-1", {})
+        assert result == "error: 'job_id' is required"
+
+    async def test_job_not_found_returns_friendly_message(self):
+        client = _client_with_handler(lambda r: httpx.Response(404, json={"detail": "Job not found"}))
+        tool = draft_cv_tool(client)
+        result = await tool.handler("user-1", {"job_id": "no-such-job"})
+        assert result == "That job could not be found."
+
+    async def test_no_profile_returns_friendly_message(self):
+        client = _client_with_handler(
+            lambda r: httpx.Response(404, json={"detail": "No profile found yet — the user hasn't uploaded a resume."})
+        )
+        tool = draft_cv_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert "hasn't uploaded a resume" in result
+
+    async def test_validation_error_returns_error_string(self):
+        client = _client_with_handler(lambda r: httpx.Response(422, json={"detail": "bad instructions"}))
+        tool = draft_cv_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert result == "error: bad instructions"
+
+    async def test_unreachable_backend_returns_readable_message(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Name or service not known", request=request)
+
+        client = _client_with_handler(handler)
+        tool = draft_cv_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert "temporarily unreachable" in result
 
 
 @pytest.mark.asyncio

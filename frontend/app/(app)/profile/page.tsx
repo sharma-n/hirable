@@ -11,6 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  History,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,10 +37,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   apiGetProfile,
+  apiListProfileVersions,
+  apiRestoreProfileVersion,
   apiUpdateProfile,
   apiUploadResume,
   type Profile,
   type ProfileData,
+  type ProfileVersion,
 } from "@/lib/api";
 
 // Sections written by the profile-enrichment tools (update_profile_section /
@@ -959,6 +964,128 @@ function EnrichmentSection({
   );
 }
 
+function SOURCE_LABEL(source: ProfileVersion["source"]): string {
+  if (source === "agent") return "Before the assistant's edits";
+  if (source === "restore") return "Before a restore";
+  return "Before your edit";
+}
+
+function VersionHistorySection({
+  onRestore,
+  isDirty,
+}: {
+  onRestore: (versionId: string) => Promise<void>;
+  isDirty: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [versions, setVersions] = useState<ProfileVersion[] | "loading" | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && versions === null) {
+      setVersions("loading");
+      apiListProfileVersions()
+        .then(setVersions)
+        .catch(() => setVersions([]));
+    }
+  }, [open, versions]);
+
+  async function handleRestore(versionId: string) {
+    setRestoringId(versionId);
+    try {
+      await onRestore(versionId);
+      setVersions(null); // force a refetch next time the list is opened
+      setOpen(false);
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 w-full text-left"
+        >
+          {open ? (
+            <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+          )}
+          <History className="size-4 text-muted-foreground shrink-0" />
+          <CardTitle className="text-base">Version history</CardTitle>
+        </button>
+      </CardHeader>
+      {open && (
+        <CardContent>
+          {versions === "loading" || versions === null ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : versions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No earlier versions yet — this fills in as you and the assistant make changes.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {versions.map((v) => (
+                <li
+                  key={v.id}
+                  className="flex items-center justify-between gap-2 text-sm rounded-lg px-2.5 py-1.5 hover:bg-muted/50"
+                >
+                  <span>
+                    {SOURCE_LABEL(v.source)}{" "}
+                    <span className="text-muted-foreground">
+                      · {new Date(v.created_at).toLocaleString()}
+                    </span>
+                  </span>
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={restoringId !== null}
+                        />
+                      }
+                    >
+                      {restoringId === v.id ? (
+                        <Loader2 className="size-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <Undo2 className="size-3.5 mr-1.5" />
+                      )}
+                      Restore
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Restore this version?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Your current profile will be saved as a version too, so this restore
+                          can itself be undone.
+                          {isDirty && " Any unsaved edits in the form will be discarded."}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleRestore(v.id)}>
+                          Restore
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 // ── Dropzone ─────────────────────────────────────────────────────────────────
 
 function Dropzone({
@@ -1103,6 +1230,21 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleRestoreVersion(versionId: string) {
+    try {
+      const updated = await apiRestoreProfileVersion(versionId);
+      const changed = profile && profile !== "loading" ? changedSections(profile.data, updated.data) : [];
+      setProfile(updated);
+      form.reset(profileToForm(updated.data));
+      setHighlightSections(changed);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = setTimeout(() => setHighlightSections([]), 4000);
+      toast.success(`Restored — now v${updated.version}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed");
+    }
+  }
+
   async function handleUpload(file: File) {
     const startedAt = performance.now();
     const elapsedMs = () => Math.round(performance.now() - startedAt);
@@ -1226,6 +1368,7 @@ export default function ProfilePage() {
 
         {/* Editor */}
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <VersionHistorySection onRestore={handleRestoreVersion} isDirty={form.formState.isDirty} />
           <ContactSection form={form} highlighted={highlightSections.includes("contact")} />
           <SummarySection form={form} highlighted={highlightSections.includes("summary")} />
           <SkillsSection form={form} highlighted={highlightSections.includes("skills")} />

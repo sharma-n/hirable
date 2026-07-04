@@ -34,10 +34,12 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M4 are complete** (three-service
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M5 are complete** (three-service
 skeleton + one-command setup; full auth + session management + admin console + UI redesign;
 resume upload → master profile; job ingest by URL/paste → shortlist; contextual agent panels
-with profile-enrichment write tools — see SPEC.md §6.0 for the chat-tab → embedded-panel pivot).
+with profile-enrichment write tools — see SPEC.md §6.0 for the chat-tab → embedded-panel pivot;
+tailored CV generation + YAML editor + on-demand PDF preview + profile version history/undo —
+see SPEC.md §8.3/§6.6 and this file's M5 gotchas for the Typst-not-TinyTeX correction).
 
 ---
 
@@ -200,13 +202,17 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
 | `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
 | `backend/app/api/jobs.py` | `POST /` (url/paste ingest + `needs_paste` signal), `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` — all scoped to `current_user` |
-| `backend/app/internal/` | Secret-gated `/internal/*` routes (M4): `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode), `profile.py` (`update-section`, `add-item`), `deps.py` (`verify_internal_secret`) |
-| `frontend/app/(app)/profile/` | Split-screen: `AgentPanel` (conversationBase=`"profile"`) + resume dropzone / section-by-section profile editor; live-refreshes + highlights sections the agent just wrote |
-| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5 artifact placeholder |
+| `backend/app/internal/` | Secret-gated `/internal/*` routes: `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode, plus M5's "a CV already exists at v{n}" hint in job mode), `profile.py` (`update-section`, `add-item` — now snapshot via `db/profile_history.py` before writing), `documents.py` (M5: `draft-cv`, backs the agent tool), `deps.py` (`verify_internal_secret`) |
+| `backend/app/db/profile_history.py` | M5: `snapshot_profile` (unconditional, user saves) / `snapshot_for_agent_write` (debounced, agent writes) + prune-to-`max_versions` |
+| `backend/app/rendercv/` | M5: `tailor.py` (`TailoredCV` LLM call), `build.py` (deterministic YAML assembly from profile+tailored+job), `compile.py` (in-process Typst compile, `CompileError` w/ yaml/schema/render stage), `service.py` (`draft_cv_document` — shared by internal route + public API) |
+| `backend/app/api/documents.py` | M5: `POST /draft`, `GET ""` (list, job-scoped), `GET/PUT/DELETE /{id}`, `POST /compile` (stateless, source-text-in/PDF-bytes-out) — all scoped to `current_user` |
+| `frontend/app/(app)/profile/` | Split-screen: `AgentPanel` (conversationBase=`"profile"`) + resume dropzone / section-by-section profile editor; live-refreshes + highlights sections the agent just wrote; M5: `VersionHistorySection` (list + restore, `AlertDialog` confirm) |
+| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5: `CvArtifact` (replaces the M4 placeholder) |
 | `frontend/components/agent-panel.tsx` | Reusable chat panel (M4): WS connect, ordered text/tool_call/tool_result message parts (markdown-rendered via `react-markdown`), model picker, "new chat" generation-suffix button, one-click `starterPrompt` chip, localStorage transcript persistence keyed by `conversationId` |
+| `frontend/components/cv-artifact.tsx` | M5: CodeMirror YAML editor + `<iframe>` PDF preview (blob URL, no PDF-viewer dep) + version picker; exposes an imperative `refetch()` handle (`forwardRef`/`useImperativeHandle`) so the job-detail page can refresh it from `AgentPanel`'s `onToolResult` on `draft_cv` |
 | `frontend/components/ui/textarea.tsx` | Native textarea with base-nova Tailwind styling |
 | `agent/bootstrap.py` | Builds `AgentService` with `extra_tools`/`system_prompt_fn`, embeds `good_resume.md`, secret middleware, /health |
-| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient`), `profile.py` (the 3 write tools), `context.py` (`build_system_prompt_fn`) |
+| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient` + `post_json`/`error_detail` helpers, relocated here in M5 so `documents.py` doesn't cross-import `profile.py`'s privates), `profile.py` (the 3 write tools), `documents.py` (M5: `draft_cv` tool), `context.py` (`build_system_prompt_fn`) |
 | `frontend/app/(app)/` | Authenticated route group: profile, jobs, admin (layout enforces session cookie) — no chat route (see CLAUDE.md's M4 notes) |
 | `frontend/app/(auth)/` | Auth route group: login, signup (layout redirects if already authed) |
 | `frontend/components/app-shell.tsx` | Sticky nav (Profile/Jobs/Admin) + theme toggle + user dropdown |
@@ -225,7 +231,7 @@ The master `ProfileModel` (`backend/app/llm/schemas.py`) is intentionally a supe
 
 | ProfileModel field | RenderCV mapping |
 |---|---|
-| `contact.headline` | `cv.headline` |
+| `contact.headline` | `cv.headline` (only when no tailored summary is present; mutually exclusive to avoid duplication) |
 | `contact.website` | `cv.website` |
 | `contact.social_networks[].network/username` | `cv.social_networks[].network/username` |
 | `experience[].position` | `ExperienceEntry.position` |
@@ -257,8 +263,8 @@ preferentially.
 | M2 — resume upload → profile | **Done** | docling extraction, llm_kit structured parse, Resume+Profile DB models, section editor with useFieldArray, enrichment stub |
 | M3 — jobs shortlist | **Done** | trafilatura fetch+extract with `needs_paste` fallback signal; flat `JobModel` designed for a single `llm.invoke()` call (no Part1/Part2 split, unlike `ProfileModel`) — verified with mocked LLM in tests, **not yet confirmed against the real Anthropic API**; list+detail UI; no `shortlist_status`/no versioning by design (deferred to M7) |
 | M4 — contextual agent panels + profile-enrichment tools | **Done** | Design pivot: no standalone chat tab — `AgentPanel` embedded split-screen in profile + job-detail pages; 3 write-only tools (`update_profile_section`, `add_profile_item`, `record_clarification`) — no read tools, profile/job context injected per-turn via `system_prompt_fn` instead |
-| M5 — CV generation + editor + PDF | Pending | TinyTeX install deferred to here |
-| M6 — cover letter | Pending | |
+| M5 — CV generation + editor + PDF + profile version history | **Done** | Deterministic-skeleton + LLM-tailoring (`TailoredCV`, one call — no Part-split needed); RenderCV renders via **Typst, not TinyTeX** (corrects the original plan — see M5 gotchas); DB-only document storage (no PDFs ever on disk); `draft_cv` is the only new agent tool (`compile_document`/`save_document` dropped — one-click UI actions instead); profile version history/undo added to scope mid-planning |
+| M6 — cover letter | Pending | Typesetting approach TBD — likely Typst too, for consistency with M5's CV (not the originally-planned LaTeX/TinyTeX) |
 | M7 — application tracking + automation | Pending | |
 | M8 — analytics dashboard | Pending | |
 | M9 — polish, hardening, docs | Pending | |
@@ -558,3 +564,107 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   exactly by a parent dependency (`npm ls <pkg>`, or grep the parent's own `package.json`) — an
   `overrides` entry is very often the non-destructive fix, especially for a mature, API-stable
   tool like postcss where a transitive minor/patch bump is safe.**
+
+## Gotchas encountered during M5
+
+- **RenderCV v2.8 renders via Typst, not LaTeX/TinyTeX — this contradicted SPEC.md's and this
+  file's own original M5 plan.** `docs/rendercv.md` (the reference doc itself) says so explicitly,
+  and reading the installed package confirmed it: `rendercv.renderer.pdf_png` imports `typst` (the
+  `typst-py` Rust-based compiler, a prebuilt-binary wheel) and `rendercv_fonts` (bundled font
+  assets) — no `.tex` output exists at all. Practically this is a *simplification*: no system LaTeX
+  toolchain to provision, just two pip packages. But it means `rendercv>=2.8` alone isn't enough —
+  the plain (non-`[full]`) install is missing the compiler/fonts entirely
+  (`ModuleNotFoundError: No module named 'rendercv_fonts'` at import time, with rendercv's own error
+  pointing at the fix). Fixed via `uv add "rendercv[full]"` — pulls in `typst` (`manylinux_2_17_x86_64`
+  wheel — portable, no apt-get needed even in `python:3.13-slim`) and `rendercv-fonts` (pure
+  `py3-none-any` wheel). **If you see `rendercv`-related `ModuleNotFoundError`s, check the `[full]`
+  extra first**, not a missing system package.
+- **RenderCV has a clean in-process Python API — don't shell out to the CLI.**
+  `rendercv.schema.rendercv_model_builder.build_rendercv_dictionary_and_model(yaml_text,
+  input_file_path=...)` → `(dict, RenderCVModel)`, then `rendercv.renderer.typst.generate_typst(model)`
+  → `rendercv.renderer.pdf_png.generate_pdf(model, typst_path)`. This is exactly the pipeline
+  `rendercv render` itself calls internally (traced via `cli/render_command/run_rendercv.py`) — using
+  it directly gives real Python exceptions instead of CLI output parsing. **Both plain YAML syntax
+  errors and schema-validation errors raise the same `RenderCVUserValidationError`** — the only way
+  to tell them apart is `all(e.schema_location is None for e in exc.validation_errors)` (syntax
+  errors have no schema location; schema errors do). `backend/app/rendercv/compile.py`'s `stage`
+  field ("yaml" vs "schema" vs "render") is derived from exactly this check.
+- **`generate_typst`/`generate_pdf` still need a real file on disk for path resolution**
+  (`rendercv_model._input_file_path`, used for output-path placeholders and photo resolution), even
+  though `build_rendercv_dictionary_and_model` itself only needs the YAML as a string. `compile_pdf`
+  writes `source_text` into a `tempfile.TemporaryDirectory()` first, for this reason alone — nothing
+  is ever read back from disk except the final PDF bytes, and the whole directory is discarded on
+  exit (this is also what keeps PDFs from ever touching the file store — see the DB-only-storage
+  decision below).
+- **RenderCV's `Cv` model has no top-level `summary` field** — only `sections: dict[str, list[Entry]]`.
+  A tailored professional summary has to become its own section using `TextEntry` (a section whose
+  value is a list of plain strings): `sections: {"Summary": ["<summary text>"]}`. Caught by a unit
+  test in `test_rendercv.py` that would otherwise have silently produced YAML which never surfaced
+  the summary at all (extra dict keys are ignored by RenderCV's `BaseModelWithoutExtraKeys` in some
+  contexts, so a naive `cv["summary"] = ...` doesn't even error — it just vanishes).
+- **`agent_kit`'s `Tool` handler signature is `(user_id, arguments) -> str` only — no
+  `conversation_id`.** Confirmed by reading `agent_kit/tools/base.py`'s `ToolHandler` type alias and
+  `registry.py`'s `tool.handler(user_id, call.arguments)` call site. This matters because the
+  original M5 plan assumed `draft_cv` could derive its target job from `conversation_id` the same way
+  `system_prompt_fn` does (`_strip_namespace` in `internal/context.py`) — it can't, since only
+  `system_prompt_fn` receives `conversation_id`. Fixed by making `job_id` an explicit required tool
+  argument instead; this costs nothing because the job's id is already shown to the model in plain
+  text in the job-mode context block (`f"Job posting (id={job.id})..."`), so the model just echoes it
+  back. **If a future tool seems to need to know "what conversation/job am I in," it can't read that
+  from anywhere except values already present in the injected per-turn context — there is no hidden
+  channel.**
+- **Real, E.164-format-valid phone numbers can still fail RenderCV's *validity* check** — its
+  underlying `phonenumbers`-based validator rejects some region/exchange combinations as not-a-real-
+  number even though they match `+<countrycode><digits>` syntactically (e.g. numbers with reserved
+  NANP area codes). `build.py`'s own `_PHONE_RE` is deliberately just a syntactic E.164 pre-filter
+  (format-valid → passed through), not a full validity check — RenderCV's own schema validation at
+  compile time is the intended final gate (surfaces as a `"schema"`-stage `CompileError` the user can
+  fix in the editor), and that's by design, not a bug: re-implementing full phone-number validity
+  checking in `build.py` would just duplicate logic RenderCV already does correctly. (This only bit
+  the test suite, which used a fictional `555`-area-code number for a "should compile successfully"
+  fixture — fixed by switching to `+14155552671`, a number widely used in phone-library test suites
+  specifically because it validates.)
+- **SQLite's `DateTime(timezone=True)` columns come back tz-naive on read**, same as the existing
+  `app/auth/sessions.py` gotcha (`session.expires_at.replace(tzinfo=timezone.utc)`) — the M5 profile
+  version debounce check (`datetime.now(timezone.utc) - newest.created_at`) hit the identical
+  `TypeError: can't subtract offset-naive and offset-aware datetimes` until given the same
+  `.replace(tzinfo=timezone.utc)` treatment in `db/profile_history.py`. **Any new code comparing a
+  DB-read datetime against `datetime.now(timezone.utc)` needs this — it is not automatic just because
+  the column is declared `timezone=True`.**
+- **`docs/` needed a new volume mount into the `backend` container** — before M5, only `agent`
+  mounted `./docs:/app/docs:ro` (for `good_resume.md`, embedded into the agent's system prompt).
+  `backend/app/rendercv/tailor.py` also needs `good_resume.md` (as tailoring-prompt rules), so
+  `docker-compose.yml`'s `backend` service now mounts `docs/` too. The local-dev (no-Docker) path
+  resolution in `tailor.py` mirrors `agent/bootstrap.py`'s `_find_good_resume` pattern — Docker
+  candidate vs. repo-root-relative candidate — but one directory level deeper (`rendercv/tailor.py`
+  vs. top-level `bootstrap.py`), so the parent-walk count differs; don't copy-paste the exact
+  `Path(__file__).parent` chain between the two without checking each file's actual nesting depth.
+- **DB-only document storage (privacy decision, made explicitly by the user during planning): no CV
+  PDF, and no RenderCV/Typst intermediate file, is ever written to the persistent file store.**
+  Only `documents.source_text` (the RenderCV YAML) lives in the DB; PDFs are compiled into a
+  `TemporaryDirectory` per request and streamed back as response bytes, never touching
+  `backend/app/files.py`'s upload-storage machinery (which still exists, unchanged, for resume
+  uploads only). This is also why `documents` has no `pdf_path` column, unlike SPEC §7's original
+  plan — there is no path to record.
+- **`draft_cv` is the only new M5 agent tool** — `compile_document`/`save_document` from SPEC's
+  original §6.2 catalogue were deliberately not built. The CV panel (`cv-artifact.tsx`) sits directly
+  next to the chat panel in the job-detail page, so compiling and saving are one-click UI actions
+  against the public API (`POST /api/documents/compile`, `PUT /api/documents/{id}`) — adding
+  redundant agent tools for the same two actions would be pure overhead under the write-only-tools
+  philosophy (§6.1's "no read tools" reasoning generalizes: don't add a tool for something the user
+  can already do with one click right next to the chat).
+- **Grammar-limit smoke test confirmed `TailoredCV` fits in a single `llm.invoke()` call** — unlike
+  `ProfileModel`, which needed the Part1/Part2 split. Verified against the real Anthropic API with an
+  8-experience/4-project synthetic profile (502 completion tokens, well under `max_tokens: 4096`, no
+  400). The schema's index-based selection (`{index, summary, highlights}` per item, 2-3 fields) is
+  much lighter per-item than `ProfileModel`'s item schemas (7-9 fields) — this is *why* it fits, not
+  a coincidence, but **re-run the same smoke-test pattern if `TailoredCV` ever grows heavier fields**,
+  per the same rule already established for `ProfileModel`/`JobModel`.
+- **Full `docker compose up` was not verified in the environment this milestone was implemented in**
+  — Docker wasn't reachable (WSL2 without the Docker Desktop WSL integration enabled). Confidence
+  that the Docker build will still work rests on inspecting the installed wheels directly: `typst` is
+  tagged `manylinux_2_17_x86_64`/`manylinux2014_x86_64` (portable to any glibc≥2.17 Linux, which
+  `python:3.13-slim`/Debian satisfies) and `rendercv-fonts` is a pure-Python `py3-none-any` wheel —
+  neither needs anything beyond what `uv pip install --system -e .` already does in the existing
+  Dockerfile. **This is inference from wheel metadata, not a live Docker build — re-verify with an
+  actual `docker compose up` before relying on it for a real deployment.**

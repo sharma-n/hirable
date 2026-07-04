@@ -228,6 +228,21 @@ export async function apiUpdateProfile(data: ProfileData): Promise<Profile> {
   });
 }
 
+export interface ProfileVersion {
+  id: string;
+  version: number;
+  source: "user" | "agent" | "restore";
+  created_at: string;
+}
+
+export async function apiListProfileVersions(): Promise<ProfileVersion[]> {
+  return apiFetch<ProfileVersion[]>("/api/profile/versions");
+}
+
+export async function apiRestoreProfileVersion(versionId: string): Promise<Profile> {
+  return apiFetch<Profile>(`/api/profile/versions/${versionId}/restore`, { method: "POST" });
+}
+
 export async function apiUploadResume(file: File): Promise<Profile> {
   const formData = new FormData();
   formData.append("file", file);
@@ -310,6 +325,83 @@ export async function apiUpdateJob(jobId: string, data: JobData): Promise<Job> {
 
 export async function apiDeleteJob(jobId: string): Promise<void> {
   return apiFetch<void>(`/api/jobs/${jobId}`, { method: "DELETE" });
+}
+
+// ---- Documents (M5 — CV generation) types ----------------------------------
+
+export interface DocumentListItem {
+  id: string;
+  job_id: string;
+  type: string;
+  version: number;
+  is_finalized: boolean;
+  created_at: string;
+}
+
+export interface DocumentDetail extends DocumentListItem {
+  source_format: string;
+  source_text: string;
+}
+
+export interface CompileErrorDetail {
+  stage: "yaml" | "schema" | "render";
+  errors: string[];
+}
+
+export class CompileFailure extends Error {
+  detail: CompileErrorDetail;
+  constructor(detail: CompileErrorDetail) {
+    super(detail.errors.join("; "));
+    this.detail = detail;
+  }
+}
+
+// ---- Documents API ----------------------------------------------------------
+
+export async function apiDraftCv(jobId: string, instructions?: string): Promise<DocumentDetail> {
+  return apiFetch<DocumentDetail>("/api/documents/draft", {
+    method: "POST",
+    body: JSON.stringify({ job_id: jobId, instructions: instructions || undefined }),
+  });
+}
+
+export async function apiListDocuments(jobId: string): Promise<DocumentListItem[]> {
+  return apiFetch<DocumentListItem[]>(`/api/documents?job_id=${jobId}`);
+}
+
+export async function apiGetDocument(documentId: string): Promise<DocumentDetail> {
+  return apiFetch<DocumentDetail>(`/api/documents/${documentId}`);
+}
+
+export async function apiSaveDocument(documentId: string, sourceText: string): Promise<DocumentDetail> {
+  return apiFetch<DocumentDetail>(`/api/documents/${documentId}`, {
+    method: "PUT",
+    body: JSON.stringify({ source_text: sourceText }),
+  });
+}
+
+export async function apiDeleteDocument(documentId: string): Promise<void> {
+  return apiFetch<void>(`/api/documents/${documentId}`, { method: "DELETE" });
+}
+
+export async function apiCompileDocument(sourceText: string): Promise<Blob> {
+  const res = await fetch(`${backendBase}/api/documents/compile`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_text: sourceText }),
+  });
+  if (!res.ok) {
+    let detail: CompileErrorDetail = { stage: "render", errors: [res.statusText] };
+    try {
+      const body = (await res.json()) as { detail?: CompileErrorDetail };
+      if (body.detail) detail = body.detail;
+    } catch {
+      // ignore
+    }
+    throw new CompileFailure(detail);
+  }
+  return res.blob();
 }
 
 // ---- Chat / agent API -------------------------------------------------------

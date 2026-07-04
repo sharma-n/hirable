@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AgentPanel } from "@/components/agent-panel";
+import { CvArtifact, type CvArtifactHandle } from "@/components/cv-artifact";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,12 +19,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { apiDeleteJob, apiGetJob, apiUpdateJob, type Job, type JobData } from "@/lib/api";
 
 // ── Form types ──────────────────────────────────────────────────────────────
@@ -202,32 +203,14 @@ function WhyOpenedSection({ form }: { form: UseFormReturn<JobFormValues> }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-function ArtifactsPlaceholder() {
-  return (
-    <Card className="opacity-60">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base">CV & cover letter</CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            Coming in M5
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Once you're ready, the assistant will generate a tailored CV (RenderCV YAML + PDF
-          preview) and cover letter for this role here.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [job, setJob] = useState<Job | "loading" | null>("loading");
   const [showRawText, setShowRawText] = useState(false);
+  const [cvHighlighted, setCvHighlighted] = useState(false);
+  const cvRef = useRef<CvArtifactHandle | null>(null);
+  const highlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<JobFormValues>({ defaultValues: EMPTY_FORM });
 
@@ -236,7 +219,19 @@ export default function JobDetailPage() {
     if (["update_profile_section", "add_profile_item", "record_clarification"].includes(name)) {
       toast.info("Your profile was updated based on this conversation — see the Profile page.");
     }
+    if (name === "draft_cv") {
+      cvRef.current?.refetch();
+      setCvHighlighted(true);
+      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+      highlightTimeout.current = setTimeout(() => setCvHighlighted(false), 4000);
+    }
   }
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+    };
+  }, []);
 
   useEffect(() => {
     apiGetJob(params.id)
@@ -290,9 +285,9 @@ export default function JobDetailPage() {
     );
   } else {
     rightPane = (
-    <div className="max-w-3xl w-full px-4 py-8 space-y-6">
+    <div className="max-w-3xl w-full px-4 py-8 flex flex-col">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold">
             {job.parsed.title || "Untitled role"}
@@ -353,43 +348,56 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Editor */}
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <RoleSection form={form} />
-        <RequirementsSection form={form} />
-        <TeamCompanySection form={form} />
-        <WhyOpenedSection form={form} />
+      {/* Tabs */}
+      <Tabs defaultValue="application" className="flex-1 flex flex-col">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="application">Application</TabsTrigger>
+          <TabsTrigger value="job-details">Job details</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Original posting text</CardTitle>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowRawText((v) => !v)}
-              >
-                {showRawText ? "Hide" : "Show"}
+        {/* Application Tab */}
+        <TabsContent value="application" className="flex-1 space-y-6">
+          <CvArtifact ref={cvRef} jobId={job.id} highlighted={cvHighlighted} />
+        </TabsContent>
+
+        {/* Job Details Tab */}
+        <TabsContent value="job-details" className="flex-1 space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <RoleSection form={form} />
+            <RequirementsSection form={form} />
+            <TeamCompanySection form={form} />
+            <WhyOpenedSection form={form} />
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Original posting text</CardTitle>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRawText((v) => !v)}
+                  >
+                    {showRawText ? "Hide" : "Show"}
+                  </Button>
+                </div>
+              </CardHeader>
+              {showRawText && (
+                <CardContent>
+                  <Textarea value={job.raw_text} readOnly rows={12} className="text-xs" />
+                </CardContent>
+              )}
+            </Card>
+
+            <div className="flex justify-end pb-8">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="size-4 animate-spin mr-1.5" />}
+                Save changes
               </Button>
             </div>
-          </CardHeader>
-          {showRawText && (
-            <CardContent>
-              <Textarea value={job.raw_text} readOnly rows={12} className="text-xs" />
-            </CardContent>
-          )}
-        </Card>
-
-        <ArtifactsPlaceholder />
-
-        <div className="flex justify-end pb-8">
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="size-4 animate-spin mr-1.5" />}
-            Save changes
-          </Button>
-        </div>
-      </form>
+          </form>
+        </TabsContent>
+      </Tabs>
     </div>
     );
   }

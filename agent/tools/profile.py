@@ -22,30 +22,13 @@ import httpx
 from agent_kit.tools.base import Tool
 from llm_kit import ToolDefinition
 
+from .client import error_detail as _error_detail
+from .client import post_json as _post
+
 _NO_PROFILE_MESSAGE = "No profile found yet — the user hasn't uploaded a resume."
-_UNREACHABLE_MESSAGE = (
-    "error: the profile service is temporarily unreachable — tell the user their "
-    "change couldn't be saved and to try again in a moment."
-)
 
 _LIST_SECTIONS = ["skills", "experience", "projects", "publications", "education", "extras"]
 _ALL_UPDATE_SECTIONS = ["contact", "summary", *_LIST_SECTIONS]
-
-
-def _error_detail(resp: httpx.Response) -> str:
-    try:
-        return str(resp.json().get("detail", resp.text))
-    except Exception:
-        return resp.text
-
-
-async def _post(client: httpx.AsyncClient, path: str, body: dict[str, Any]) -> httpx.Response | str:
-    """POST to the internal API; returns the response, or a readable error string
-    in place of a raw transport exception (connection refused, DNS failure, timeout)."""
-    try:
-        return await client.post(path, json=body)
-    except httpx.RequestError:
-        return _UNREACHABLE_MESSAGE
 
 
 def update_profile_section_tool(client: httpx.AsyncClient) -> Tool:

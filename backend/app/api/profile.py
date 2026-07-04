@@ -9,14 +9,15 @@ from llm_kit import LLMClient
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import current_user, get_db
-from app.db.models import Profile, Resume, User
+from app.db.models import Profile, ProfileVersion, Resume, User
+from app.db.profile_history import snapshot_profile
 from app.files import delete_user_uploads, save_upload
 from app.llm.deps import get_llm
 from app.llm.schemas import ProfileModel
 from app.parsing.deps import get_docling_converter
 from app.parsing.extract import extract_text
 from app.parsing.profile import parse_resume
-from app.schemas import ProfileOut, ResumeOut
+from app.schemas import ProfileOut, ProfileVersionOut, ResumeOut
 
 logger = logging.getLogger("app.profile")
 
@@ -102,6 +103,7 @@ async def upload_resume(
         )
         db.add(profile_row)
     else:
+        snapshot_profile(db, existing, source="user")
         existing.data = profile_data
         existing.version += 1
         existing.updated_at = datetime.now(timezone.utc)
@@ -138,7 +140,43 @@ def update_profile(
     profile: Profile | None = db.query(Profile).filter_by(user_id=user.id).first()
     if profile is None:
         raise HTTPException(status_code=404, detail="No profile found. Upload a resume first.")
+    snapshot_profile(db, profile, source="user")
     profile.data = body.model_dump()
+    profile.version += 1
+    profile.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.get("/versions", response_model=list[ProfileVersionOut])
+def list_profile_versions(
+    db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> list[ProfileVersion]:
+    return (
+        db.query(ProfileVersion)
+        .filter_by(user_id=user.id)
+        .order_by(ProfileVersion.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/versions/{version_id}/restore", response_model=ProfileOut)
+def restore_profile_version(
+    version_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Profile:
+    version = db.query(ProfileVersion).filter_by(id=version_id, user_id=user.id).first()
+    if version is None:
+        raise HTTPException(status_code=404, detail="Profile version not found")
+    profile: Profile | None = db.query(Profile).filter_by(user_id=user.id).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="No profile found")
+
+    # Snapshot the current state before restoring, so the restore is itself undoable.
+    snapshot_profile(db, profile, source="restore")
+    profile.data = version.data
     profile.version += 1
     profile.updated_at = datetime.now(timezone.utc)
     db.commit()

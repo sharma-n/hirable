@@ -1,10 +1,14 @@
 """M4 internal API tests — secret enforcement, context building, section writes, isolation."""
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
-from app.db.models import Job, Profile
-from app.llm.schemas import ProfileModel
+from app.db.models import Document, Job, Profile
+from app.llm.deps import get_llm
+from app.llm.schemas import ProfileModel, TailoredCV
+from app.main import app
 
 _SECRET = "test-internal-secret"
 
@@ -248,6 +252,118 @@ class TestAddItem:
             headers=_headers(),
         )
         assert r.status_code == 422
+
+
+def _fake_tailored_cv() -> TailoredCV:
+    return TailoredCV(
+        summary="Tailored.",
+        section_order=["experience"],
+        skills=[],
+        experience=[],
+        projects=[],
+        education=[],
+        publications=[],
+        extras=[],
+    )
+
+
+@pytest.fixture()
+def patched_llm_client(client):
+    fake_response = MagicMock()
+    fake_response.parsed = _fake_tailored_cv()
+    fake_llm = MagicMock()
+    fake_llm.invoke = AsyncMock(return_value=fake_response)
+    app.dependency_overrides[get_llm] = lambda: fake_llm
+    yield client, fake_llm
+    app.dependency_overrides.pop(get_llm, None)
+
+
+class TestDraftCv:
+    def test_creates_document_v1(self, patched_llm_client, db_session):
+        client, _ = patched_llm_client
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+        job = _seed_job(db_session, user["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["version"] == 1
+
+        doc = db_session.query(Document).filter_by(id=r.json()["document_id"]).first()
+        assert doc.user_id == user["id"]
+        assert doc.job_id == job.id
+        assert doc.type == "cv"
+        assert "cv:" in doc.source_text
+
+    def test_second_draft_bumps_version(self, patched_llm_client, db_session):
+        client, _ = patched_llm_client
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+        job = _seed_job(db_session, user["id"])
+
+        client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        r = client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.json()["version"] == 2
+
+    def test_missing_job_returns_404(self, patched_llm_client, db_session):
+        client, _ = patched_llm_client
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user["id"], "job_id": "no-such-job"},
+            headers=_headers(),
+        )
+        assert r.status_code == 404
+
+    def test_missing_profile_returns_404(self, patched_llm_client, db_session):
+        client, _ = patched_llm_client
+        user = _signup(client, "a@example.com")
+        job = _seed_job(db_session, user["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.status_code == 404
+
+    def test_missing_secret_rejected(self, client):
+        r = client.post(
+            "/internal/documents/draft-cv", json={"user_id": "u", "job_id": "j"}
+        )
+        assert r.status_code == 403
+
+
+class TestDraftCvIsolation:
+    def test_user_b_cannot_draft_cv_for_user_a_job(self, patched_llm_client, db_session):
+        client, _ = patched_llm_client
+        user_a = _signup(client, "a@example.com")
+        _seed_profile(db_session, user_a["id"])
+        job = _seed_job(db_session, user_a["id"])
+
+        user_b = _signup(client, "b@example.com")
+        _seed_profile(db_session, user_b["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cv",
+            json={"user_id": user_b["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.status_code == 404
 
 
 class TestIsolation:

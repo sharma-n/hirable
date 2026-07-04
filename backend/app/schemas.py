@@ -75,6 +75,52 @@ class JobOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProfileVersionOut(BaseModel):
+    id: str
+    version: int
+    source: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentOut(BaseModel):
+    id: str
+    job_id: str
+    type: str
+    source_format: str
+    source_text: str
+    version: int
+    is_finalized: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentListItemOut(BaseModel):
+    id: str
+    job_id: str
+    type: str
+    version: int
+    is_finalized: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentDraftRequest(BaseModel):
+    job_id: str
+    instructions: str | None = None
+
+
+class DocumentUpdateRequest(BaseModel):
+    source_text: str
+
+
+class DocumentCompileRequest(BaseModel):
+    source_text: str
+
+
 class JobCreateRequest(BaseModel):
     url: str | None = None
     raw_text: str | None = None

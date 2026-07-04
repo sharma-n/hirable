@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_db
-from app.db.models import Job, Profile
+from app.db.models import Document, Job, Profile
 from app.internal.deps import verify_internal_secret
 from app.internal.schemas import ContextRequest, ContextResponse
 
@@ -39,7 +39,9 @@ _JOB_MODE_INSTRUCTIONS = (
     "profile against this job's must_have/nice_to_have/keywords: identify gaps where "
     "the profile doesn't yet evidence something the job wants. Ask targeted "
     "clarifying questions and persist every answer via record_clarification, "
-    "add_profile_item, or update_profile_section."
+    "add_profile_item, or update_profile_section. Once the profile has enough to work "
+    "with (or the user asks for a CV), offer to draft a tailored CV for this job via "
+    "the draft_cv tool, passing this job's id shown above."
 )
 
 _JOB_NOT_FOUND_BLOCK = (
@@ -79,9 +81,25 @@ def build_context(db: Session, user_id: str, conversation_id: str) -> str:
             return _JOB_NOT_FOUND_BLOCK
         profile = db.query(Profile).filter_by(user_id=user_id).first()
         profile_block = json.dumps(profile.data) if profile is not None else "(none)"
+
+        latest_cv: Document | None = (
+            db.query(Document)
+            .filter_by(user_id=user_id, job_id=job.id, type="cv")
+            .order_by(Document.version.desc())
+            .first()
+        )
+        cv_block = (
+            f"A draft CV already exists for this job (version {latest_cv.version}, "
+            f"created {latest_cv.created_at.isoformat()}). Calling draft_cv again creates "
+            f"a new version — only do so if asked or if there's new information to reflect."
+            if latest_cv is not None
+            else "No CV has been drafted for this job yet."
+        )
+
         return (
             f"Current master profile:\n{profile_block}\n\n"
             f"Job posting (id={job.id}):\n{json.dumps(job.parsed)}\n\n"
+            f"{cv_block}\n\n"
             f"{_JOB_MODE_INSTRUCTIONS}"
         )
 

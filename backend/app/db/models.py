@@ -41,6 +41,12 @@ class User(Base):
     jobs: Mapped[list[Job]] = relationship(
         "Job", back_populates="user", cascade="all, delete-orphan"
     )
+    documents: Mapped[list[Document]] = relationship(
+        "Document", back_populates="user", cascade="all, delete-orphan"
+    )
+    profile_versions: Mapped[list[ProfileVersion]] = relationship(
+        "ProfileVersion", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Session(Base):
@@ -110,3 +116,61 @@ class Job(Base):
     )
 
     user: Mapped[User] = relationship("User", back_populates="jobs")
+    documents: Mapped[list[Document]] = relationship(
+        "Document", back_populates="job", cascade="all, delete-orphan"
+    )
+
+
+class Document(Base):
+    """A generated CV/cover-letter draft. Versions are append-only rows — never
+    mutated in place — so a finalized application (M7) can snapshot the exact
+    document that was submitted even after later edits. Only the source text
+    (RenderCV YAML) is persisted; PDFs are compiled on demand and never stored
+    on disk (see backend/app/rendercv/compile.py)."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_id: Mapped[str] = mapped_column(
+        String, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    type: Mapped[str] = mapped_column(String, nullable=False)  # "cv" | "cover_letter"
+    source_format: Mapped[str] = mapped_column(String, nullable=False, default="rendercv_yaml")
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_finalized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="documents")
+    job: Mapped[Job] = relationship("Job", back_populates="documents")
+
+
+class ProfileVersion(Base):
+    """Pre-change snapshot of a user's profile data, for undo/history.
+
+    Snapshots capture the profile's state *before* a write is applied, so
+    "restore version N" reads naturally as "go back to how things were right
+    before that change." Agent-write bursts within a debounce window coalesce
+    into a single snapshot (see backend/app/db/profile_history.py); user saves
+    always snapshot immediately. Pruned to a configurable max per user.
+    """
+
+    __tablename__ = "profile_versions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)  # "user" | "agent" | "restore"
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="profile_versions")

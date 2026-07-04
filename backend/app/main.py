@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.admin import router as admin_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.documents import router as documents_router
 from app.api.jobs import router as jobs_router
 from app.api.profile import router as profile_router
 from app.db.migrate import run_migrations
@@ -53,6 +54,7 @@ app.include_router(admin_router)
 app.include_router(chat_router)
 app.include_router(profile_router)
 app.include_router(jobs_router)
+app.include_router(documents_router)
 app.include_router(internal_router)
 
 

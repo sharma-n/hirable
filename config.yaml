@@ -12,7 +12,7 @@ llm_kit:
 # ---- agent_kit ----
 agent:
   max_iterations: 6
-  per_tool_timeout_s: 30.0
+  per_tool_timeout_s: 120.0  # draft_cv wraps 2 LLM calls + YAML assembly — 30s was too tight
   system_prompt: |
     You are a job application assistant called hirable.
     # M4: good_resume.md rulebook will be appended here at bootstrap time.
@@ -47,6 +47,7 @@ tools:
     - update_profile_section
     - add_profile_item
     - record_clarification
+    - draft_cv
 
 mcp:
   servers: []
@@ -71,3 +72,8 @@ app:
   tracking:
     stale_after_days: 15
     auto_reject_after_days: 30
+  rendercv:
+    theme: engineeringresumes  # single-column, monochrome, ATS-safe — matches good_resume.md
+  profile_history:
+    max_versions: 20
+    agent_debounce_minutes: 15

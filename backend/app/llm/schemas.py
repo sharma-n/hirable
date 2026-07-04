@@ -201,6 +201,59 @@ class ProfileModelPart2(BaseModel):
     enrichment: list[EnrichmentItem] = Field(default_factory=list)
 
 
+class TailoredEntry(BaseModel):
+    """Tailoring decision for one experience/project item, referenced by its
+    index into the master profile's list. The LLM never re-emits company
+    names, dates, or links — only which items to include (by index, in CV
+    order) and how to reword their summary/highlights for this job. See
+    ``backend/app/rendercv/tailor.py``."""
+
+    model_config = ConfigDict(json_schema_extra=_require("index", "summary", "highlights"))
+
+    index: int
+    summary: str = ""
+    highlights: list[str] = Field(default_factory=list)
+
+
+class TailoredEducationEntry(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_require("index", "highlights"))
+
+    index: int
+    highlights: list[str] = Field(default_factory=list)
+
+
+class TailoredCV(BaseModel):
+    """LLM output for CV tailoring — a *selection and rewording* of the master
+    profile's content for one job, never the facts themselves (dates, company
+    names, emails, URLs are copied verbatim from the profile in Python — see
+    ``backend/app/rendercv/build.py``). Index-based selection keeps this schema
+    far lighter than ``ProfileModel`` per item (2-3 fields vs. 7-9) and
+    structurally rules out factual hallucination.
+
+    Unlike ``ProfileModel``, this fits in a single ``llm.invoke()`` call —
+    confirmed against the real Anthropic API with an 8-experience/4-project
+    profile (502 completion tokens, no grammar-size 400). If a future field
+    addition makes this schema heavier, re-bisect per ``ProfileModel``'s
+    Part1/Part2 precedent rather than assuming margin still exists.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra=_require(
+            "summary", "section_order", "skills", "experience", "projects",
+            "education", "publications", "extras",
+        )
+    )
+
+    summary: str = ""
+    section_order: list[str] = Field(default_factory=list)
+    skills: list[SkillItem] = Field(default_factory=list)
+    experience: list[TailoredEntry] = Field(default_factory=list)
+    projects: list[TailoredEntry] = Field(default_factory=list)
+    education: list[TailoredEducationEntry] = Field(default_factory=list)
+    publications: list[int] = Field(default_factory=list)
+    extras: list[int] = Field(default_factory=list)
+
+
 class JobModel(BaseModel):
     """Structured extraction of a job posting — see ``parsing/jobs.py``.
 

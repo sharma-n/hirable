@@ -2,8 +2,8 @@
 
 A self-hosted, multi-user web app that helps people **write, tailor, and track** job applications:
 upload a resume → parse it into a rich master profile → save job postings → chat with an agent that
-enriches the profile and generates a **tailored, LaTeX-quality CV + cover letter** per job → edit the
-source → export a professional PDF → track applications with automation and analytics.
+enriches the profile and generates a **tailored, publication-quality CV + cover letter** per job →
+edit the source → export a professional PDF → track applications with automation and analytics.
 
 This document is the implementation contract. It is paired with [`docs/good_resume.md`](docs/good_resume.md),
 the rulebook the agent uses to write and critique resumes/cover letters.
@@ -17,7 +17,8 @@ the rulebook the agent uses to write and critique resumes/cover letters.
 - One-command self-host: `docker compose up`.
 - Provider-agnostic LLM (OpenAI / Anthropic / Gemini / Ollama / vLLM / any OpenAI-compatible) via a
   single config block — **no hard-coded model or provider anywhere**.
-- Professional, LaTeX-quality PDF output with a user-editable source.
+- Professional, publication-quality PDF output (via RenderCV/Typst — not LaTeX, see §2) with a
+  user-editable source.
 - Agentic chat for profile enrichment and document generation, built on the
   [`agent_kit`](https://github.com/sharma-n/agent_kit) sidecar (which builds on
   [`llm_kit`](https://github.com/sharma-n/llm_kit)).
@@ -44,10 +45,20 @@ Three services + SQLite + a render toolchain, orchestrated by `docker compose`.
                           tool callbacks (X-Internal-Secret)   chat brain (uvicorn)
                                   ◀────────────────────────┘   internal network only
         │
-        ├── SQLite (app DB)  +  file store (uploads, generated PDFs/sources)
+        ├── SQLite (app DB)  +  file store (uploads only — see M5 note below)
         ├── llm_kit client (provider-agnostic; structured outputs)
-        └── RenderCV + TinyTeX  +  LaTeX letter template  → PDF
+        └── RenderCV (renders via Typst, not LaTeX/TinyTeX — see M5 note)  → PDF
 ```
+
+**M5 correction to this diagram (RenderCV v2.8 renders via Typst, not LaTeX):**
+RenderCV v2.8 typesets through **Typst** (a Rust-based typesetter shipped as a
+prebuilt-binary Python wheel, `typst-py`), not LaTeX/TinyTeX — there is no `.tex`
+output at all. This is lighter to provision than originally planned (no system
+LaTeX toolchain, just two pure-wheel pip packages, `rendercv[full]`). Generated
+CVs are also **DB-only** — only the RenderCV YAML source is persisted
+(`documents.source_text`); PDFs are compiled on demand into a temp directory
+and streamed back, never written to the file store, for privacy (the file
+store still holds resume *uploads*, per M2). See `backend/app/rendercv/`.
 
 - **Frontend (Next.js / React / TypeScript)** — the only host-published UI. Talks to the backend's
   **public** API over an authenticated session cookie. Streams agent events for chat.
@@ -92,7 +103,7 @@ hirable/
 │     ├─ llm/                  # llm_kit client factory + Pydantic schemas (Profile, Job, RenderCV)
 │     ├─ parsing/              # docling extraction + structured profile/job extraction
 │     ├─ rendercv/             # RenderCV YAML build + compile
-│     ├─ letters/              # cover-letter LaTeX template + compile
+│     ├─ letters/              # cover-letter template + compile (M6 — likely Typst, see §8.4)
 │     ├─ tracking/             # APScheduler jobs (stale/rejected), stage transitions
 │     └─ analytics/            # metric computations
 └─ agent/                      # agent_kit bootstrap (Python 3.13, uv-managed)
@@ -278,14 +289,21 @@ readable message.
 | `update_profile_section(section, value)` | Replace an entire profile section (overwrites) |
 | `add_profile_item(section, item)` | Append one item to a list-type profile section, without clobbering existing items |
 | `record_clarification(key, value)` | Persist a clarifying-question answer into the profile's `enrichment` list (implemented as `add_profile_item` with `section="enrichment"`) |
-| `draft_cv(job_id)` | *(M5)* Produce RenderCV YAML for a job (LLM structured output, §8.3) |
-| `draft_cover_letter(job_id)` | *(M5/M6)* Produce cover-letter source for a job |
-| `compile_document(document_id)` | *(M5)* Compile a stored document to PDF, return its URL |
-| `save_document(...)` | *(M5)* Persist a CV/cover-letter draft (source + new version) |
+| `draft_cv(job_id, instructions?)` | **(M5, done)** Tailor + assemble a RenderCV YAML CV for a job and persist it as a new document version (§8.3) |
+| `draft_cover_letter(job_id)` | *(M6)* Produce cover-letter source for a job |
 | `list_application_status` | *(M7, optional)* Let the agent answer tracking questions |
 
 `get_profile` / `list_jobs` / `get_job` from the original catalogue were **dropped** — see §6.1;
-the same data reaches the agent via `system_prompt_fn` instead.
+the same data reaches the agent via `system_prompt_fn` instead. **`compile_document`/`save_document`
+were also dropped from the M5 tool set** (decided during M5 implementation, not just planning):
+the CV panel sits directly next to the editor in the job-detail page, so compiling and saving are
+one-click UI actions against the public API (`POST /api/documents/compile`, `PUT /api/documents/{id}`)
+— giving the agent its own redundant tools for the same two actions would be pure overhead under the
+write-only-tools philosophy (§6.1). `draft_cv` takes `job_id` as an explicit argument (not derived
+from `conversation_id`) because agent_kit's `Tool` handler signature is `(user_id, arguments)` only —
+it has no access to the conversation id the way `system_prompt_fn` does — but this costs nothing
+since the job's id is already shown to the model in the job-mode context block (`system_prompt_fn`),
+so the model just echoes it back as a tool argument.
 
 ### 6.3 Memory configuration — and why episodic is OFF
 - **Working memory + session store: ON** — needed for multi-turn coherence within a conversation.
@@ -322,6 +340,22 @@ Conversation end (disconnect/idle) is signalled to the sidecar to finalize worki
 stable (non-suffixed) conversation id is what lets a user navigate away and back and resume the
 same thread, until agent_kit's idle `ttl_s` expires it.
 
+### 6.6 Profile version history & undo *(M5)*
+Every profile write snapshots the **pre-change** state into `profile_versions` (§7) before applying
+the change, so "restore version N" reads as "go back to how things were right before that change."
+- **User saves** (`PUT /api/profile`, resume re-upload) snapshot **immediately, every time**.
+- **Agent writes** (`/internal/profile/update-section`, `/internal/profile/add-item`) snapshot
+  through a **debounce window** (`app.profile_history.agent_debounce_minutes`, default 15): a new
+  snapshot is created only if the newest existing version isn't already agent-sourced and still
+  within the window. This coalesces a whole conversation's burst of tool-call edits into **one**
+  undo step — matching the mental model of undoing "what the agent did," not stepping through each
+  individual tool call.
+- History is capped at `app.profile_history.max_versions` (default 20) per user, pruned oldest-first
+  on insert.
+- **Restore** (`POST /api/profile/versions/{id}/restore`) snapshots the *current* state first (so the
+  restore itself is undoable), then applies the old snapshot's data as a new profile version — never
+  rewriting history in place.
+
 ---
 
 ## 7. Data model (SQLite, owned by backend)
@@ -333,7 +367,8 @@ same thread, until agent_kit's idle `ttl_s` expires it.
 | `resumes` | id, user_id, filename, format (`pdf`/`docx`/`tex`), raw_text, uploaded_at |
 | `profiles` | id, user_id, version, data (JSON master profile), updated_at |
 | `jobs` | id, user_id, source_url, raw_text, parsed (JSON), shortlist_status, created_at |
-| `documents` | id, user_id, job_id → jobs, type (`cv`/`cover_letter`), source_format, source_text, pdf_path, version, is_finalized, created_at |
+| `documents` | id, user_id, job_id → jobs, type (`cv`/`cover_letter`), source_format, source_text, version, is_finalized, created_at |
+| `profile_versions` | id, user_id, version, data (JSON pre-change snapshot), source (`user`/`agent`/`restore`), created_at |
 | `applications` | id, user_id, job_id → jobs, stage, submitted_at, last_activity_at, next_action, auto_stale_at, notes |
 | `application_documents` | application_id → applications, document_id → documents (snapshot of finalized CV + cover letter used) |
 | `application_events` | id, application_id, from_stage, to_stage, at, note |
@@ -342,8 +377,15 @@ same thread, until agent_kit's idle `ttl_s` expires it.
 `experience[]{company,title,start,end,location,bullets[],tech[]}`, `projects[]{name,link,bullets[],tech[]}`,
 `education[]`, `extras[]` (patents/talks/OSS/interests), `enrichment[]` (clarification key/values).
 
-All user-owned tables carry `user_id`; **deleting a user cascades** to all of the above. Generated PDFs
-and uploads live in a per-user directory in the file store; deletion removes them too.
+All user-owned tables carry `user_id`; **deleting a user cascades** to all of the above. Resume
+uploads live in a per-user directory in the file store; deletion removes them too. **`documents` has
+no `pdf_path`** (M5 decision) — only the RenderCV YAML source is persisted; PDFs are compiled
+on demand and never written to disk, so there is nothing to clean up for documents beyond the ORM
+row itself. **`documents` versions are append-only** — saving an edited CV inserts a new row rather
+than mutating the existing one, so a finalized application (M7) can snapshot the exact version
+submitted even after later edits. **`profile_versions` stores the *pre-change* snapshot** (the state
+right before a write is applied), capped at a configurable count per user (`app.profile_history.
+max_versions`, default 20, pruned oldest-first on insert) — see §6.6.
 
 ---
 
@@ -364,17 +406,45 @@ and uploads live in a per-user directory in the file store; deletion removes the
    nice_to_have[], keywords[], why_opened_guess, seniority, company_type}`.
 3. Store in `jobs`; fields are editable.
 
-### 8.3 CV generation (`draft_cv` tool / `POST /api/documents/cv`)
-- Build **RenderCV YAML** via `llm.invoke(..., response_model=RenderCVModel)` — a Pydantic mirror of
-  RenderCV's schema so output is guaranteed parsable — from the master profile + job + `good_resume.md`
-  rules (level-appropriate ordering, impact bullets, JD keyword mirroring, no self-ratings, ≤2 pages).
-- `rendercv render <yaml>` → PDF (+ `.tex`). Store source + `pdf_path` as a `documents` row.
-- User edits the YAML in-app → re-compile → live PDF preview. Each save is a new version.
+### 8.3 CV generation (`draft_cv` tool / `POST /api/documents/draft`) — **done, M5**
+Built as **deterministic skeleton + LLM tailoring**, not a single structured-output call against a
+full RenderCV-mirroring schema — decided during M5 planning after two considerations: (1) RenderCV's
+real schema (`sections: dict[str, list[Entry]]`, 9 entry types) isn't expressible as a single static
+JSON-Schema for constrained decoding, and a rigid fixed-section approximation of it would have ~7
+nested list-of-object fields — more than the 4 that already forced `ProfileModel`'s Part1/Part2 split
+(§8.1) — and (2) letting the LLM regenerate factual fields (dates, company names, emails, URLs) it
+should never touch is unnecessary hallucination risk on exactly the data that must be exact. Instead:
+1. `llm.invoke(..., response_model=TailoredCV)` — **one** call (confirmed empirically against the
+   real Anthropic API, no Part-split needed) — takes the master profile (list items numbered) + job +
+   `good_resume.md` rules, and returns an **index-based selection**: which experience/project/
+   education/publication/extras items to include (by 0-based index into the profile's own lists,
+   never re-emitted), in what order, plus reworded `summary`/`highlights` (quantified, JD-mirrored,
+   §7/§8-compliant) and regrouped `skills`. Facts are never in this model's output.
+2. `backend/app/rendercv/build.py` deterministically assembles the RenderCV YAML in Python: contact
+   block copied **verbatim** from the profile (phone/website format-validated, invalid values
+   omitted rather than passed through — RenderCV's own schema is the final gate for anything that
+   still doesn't validate), experience/education/publications/extras looked up by index and merged
+   with the tailored rewrite, a fixed `design: {theme: <app.rendercv.theme config>}` (never
+   LLM-generated), and job keywords → `settings.bold_keywords`.
+3. The assembled YAML is `documents.source_text` — **not** rendered to PDF at this point.
+4. Compiling (`POST /api/documents/compile {source_text}`) validates + renders **in-process** via
+   RenderCV's own Python API (`rendercv.schema.rendercv_model_builder.build_rendercv_dictionary_and_model`
+   → `rendercv.renderer.{typst,pdf_png}`) into a `TemporaryDirectory`, and streams PDF bytes back —
+   **no PDF or Typst source is ever persisted** (privacy decision, §2). This one stateless endpoint
+   covers both "preview my unsaved edits" and "view a saved version," since the frontend always has
+   the source text in hand either way.
+5. Saving an edit (`PUT /api/documents/{id} {source_text}`) inserts a **new** `documents` row
+   (append-only versioning, §7) rather than mutating in place.
+- User edits the YAML directly in-app (CodeMirror) → compile-preview → PDF renders inline. Compile
+  errors are structured `{stage: "yaml"|"schema"|"render", errors: [...]}`, shown next to the editor.
 
-### 8.4 Cover letter (`draft_cover_letter` tool / `POST /api/documents/cover_letter`)
-- Draft source (company-first, JD-tied, concise per `good_resume.md` §12), then compile with a minimal
-  **LaTeX letter template** via the same bundled TinyTeX for visual consistency with the CV. Editable
-  source + preview + versioning.
+### 8.4 Cover letter (`draft_cover_letter` tool / `POST /api/documents/cover_letter`) — *(M6, pending)*
+- Draft source (company-first, JD-tied, concise per `good_resume.md` §12). **Typesetting approach TBD
+  at M6 planning time** — the original plan (a LaTeX letter template via TinyTeX, "for visual
+  consistency with the CV") no longer holds now that the CV itself renders via Typst, not LaTeX
+  (§8.3); the M6 letter should likely target Typst too (e.g. a RenderCV `TextEntry`-shaped section, or
+  a small standalone Typst template) rather than introducing a second, inconsistent toolchain.
+  Editable source + preview + versioning, same shape as §8.3.
 
 ### 8.5 Clarifying-question loop
 The agent compares the profile against `good_resume.md` to find gaps (missing numbers/impact, thin
@@ -505,16 +575,37 @@ callbacks and context feed backing §6.1/§6.2:
   user A's tools/context cannot touch user B's data (`backend/tests/test_internal.py`); the
   internal API rejects calls without `X-Internal-Secret`.
 
-**M5 — CV generation + source editor + PDF preview**
-- `RenderCVModel` schema; `draft_cv` yields valid YAML; `rendercv render` → PDF + `.tex`; persist as
-  `documents`; in-app YAML editor with live re-compile + PDF preview; versioning.
-- **Acceptance:** generate a tailored CV for a job, edit the YAML, re-compile, preview updates; output
-  passes a `good_resume.md` lint spot-check (single column, quantified bullets, ≤2 pages, no
-  self-ratings).
+**M5 — CV generation + source editor + PDF preview + profile version history** ✅
+- Deterministic-skeleton + LLM-tailoring generation (§8.3, `TailoredCV` schema — one call, no
+  Part-split needed): `backend/app/rendercv/{tailor,build,compile,service}.py`. RenderCV renders via
+  **Typst**, not LaTeX/TinyTeX — no `.tex` output, no system LaTeX toolchain (correction from the
+  original plan, §2). `documents` stores YAML source only — **no PDF is ever persisted**; compiling
+  is in-process (`rendercv.schema.rendercv_model_builder` + `rendercv.renderer.*`) into a temp dir.
+  Versions are append-only rows.
+- New `backend/app/internal/documents.py` (`POST /internal/documents/draft-cv`) + `draft_cv` agent
+  tool (`agent/tools/documents.py`) — the only new agent tool; `compile_document`/`save_document`
+  were **not** added as tools (§6.2) since compiling/saving are one-click UI actions next to the
+  editor. New public API: `backend/app/api/documents.py` (draft/list/get/save/delete/compile).
+- Frontend: `frontend/components/cv-artifact.tsx` (CodeMirror YAML editor + `<iframe>` PDF preview,
+  zero new PDF-viewer dependency) replaces the M4 artifact placeholder in the job-detail page;
+  refetches on the agent's `draft_cv` tool_result frame via an imperative ref handle, mirroring the
+  profile page's existing tool-result-driven refresh pattern.
+- **Added to M5's scope during planning** (not in the original SPEC): profile version history with
+  undo (§6.6, §7's `profile_versions` table) — debounced agent-write snapshots, immediate user-save
+  snapshots, capped history, restore-as-new-version. UI: a "Version history" card on the profile page.
+- **Acceptance:** ✅ generate a tailored CV for a job (via the agent tool AND the UI "Generate CV"
+  button); edit the YAML; re-compile; preview updates; saving creates a new version, versions are
+  listable/switchable; contact facts in the output match the profile exactly (no hallucinated
+  emails/dates — verified via `build.py`'s unit tests); a conversation's burst of agent profile edits
+  produces one coalesced undo step, a user save produces its own, restore works and is itself
+  undoable; cross-user isolation verified for documents and profile versions; no PDFs or generated
+  files persisted anywhere on disk. 124 backend tests + 23 agent tests green; `npm run build` clean.
+  Real Docker-image compile (vs. wheel-portability inspection) not verified in this environment — see
+  CLAUDE.md's M5 gotchas.
 
 **M6 — Cover letter generation + editor**
-- `draft_cover_letter` (company-first, JD-tied); LaTeX letter template compile; editor + preview;
-  versioning.
+- `draft_cover_letter` (company-first, JD-tied); compile via Typst (not LaTeX — see §8.4's M5-driven
+  correction); editor + preview; versioning.
 - **Acceptance:** generate/edit/compile a cover letter; PDF is professional and visually consistent
   with the CV.
 
@@ -560,8 +651,10 @@ callbacks and context feed backing §6.1/§6.2:
 ## 15. Key dependencies
 
 - **Backend:** FastAPI, uvicorn, SQLAlchemy (or SQLModel) + SQLite, argon2-cffi, `agent_kit`
-  (brings `llm_kit`), docling, trafilatura, rendercv (+ bundled TinyTeX), APScheduler, pydantic.
+  (brings `llm_kit`), docling, trafilatura, `rendercv[full]` (brings `typst` + `rendercv-fonts` —
+  prebuilt-wheel Typst compiler, **not TinyTeX/LaTeX**, §2), APScheduler, pydantic.
 - **Agent sidecar:** `agent_kit` (configured per §4/§6), our custom tools.
-- **Frontend:** Next.js, React, TypeScript; a code editor component (e.g. Monaco/CodeMirror) for the
-  YAML/letter source; a PDF viewer; charts for analytics.
+- **Frontend:** Next.js, React, TypeScript; `@uiw/react-codemirror` (+ `@codemirror/lang-yaml`) for
+  the YAML/letter source editor; PDF preview via a plain `<iframe>` blob URL (no dedicated PDF-viewer
+  library needed); charts for analytics.
 - **LLM:** any provider/model via the `llm_kit.llm` block — no hard-coded model anywhere.

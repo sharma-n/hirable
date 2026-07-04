@@ -58,7 +58,8 @@ cd agent
 uv sync
 ANTHROPIC_API_KEY=sk-ant-... \
 AGENT_INTERNAL_SECRET=dev-secret \
-uv run uvicorn bootstrap:create_app --factory --host 0.0.0.0 --port 8001 --reload
+INTERNAL_BASE_URL=http://localhost:8000 \
+uv run uvicorn bootstrap:create_app --factory --port 8001 --reload
 ```
 
 **2. Backend**

@@ -24,3 +24,14 @@ class ProfileItemAddRequest(BaseModel):
     user_id: str
     section: str
     item: dict[str, Any]
+
+
+class DraftCvRequest(BaseModel):
+    user_id: str
+    job_id: str
+    instructions: str | None = None
+
+
+class DraftCvResponse(BaseModel):
+    document_id: str
+    version: int

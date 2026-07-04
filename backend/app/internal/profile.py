@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_db
 from app.db.models import Profile
+from app.db.profile_history import snapshot_for_agent_write
 from app.internal.deps import verify_internal_secret
 from app.internal.schemas import ProfileItemAddRequest, ProfileSectionUpdateRequest
 from app.llm.schemas import (
@@ -72,6 +73,8 @@ def update_section(body: ProfileSectionUpdateRequest, db: Session = Depends(get_
     else:
         raise HTTPException(status_code=422, detail=f"Unknown section '{body.section}'")
 
+    snapshot_for_agent_write(db, profile)
+
     # Reassign a new dict object (not an in-place mutation) so SQLAlchemy's JSON
     # column change-detection fires without needing MutableDict/flag_modified.
     profile.data = {**profile.data, body.section: validated_value}
@@ -95,6 +98,8 @@ def add_item(body: ProfileItemAddRequest, db: Session = Depends(get_db)) -> dict
         validated_item = model.model_validate(body.item).model_dump()
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    snapshot_for_agent_write(db, profile)
 
     existing_items = profile.data.get(body.section, [])
     profile.data = {**profile.data, body.section: [*existing_items, validated_item]}

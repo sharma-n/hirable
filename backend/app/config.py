@@ -54,3 +54,15 @@ def agent_base_url() -> str:
 
 def selectable_models() -> list[dict]:
     return app_config().get("selectable_models", [])
+
+
+def rendercv_theme() -> str:
+    return app_config().get("rendercv", {}).get("theme", "engineeringresumes")
+
+
+def profile_history_max_versions() -> int:
+    return app_config().get("profile_history", {}).get("max_versions", 20)
+
+
+def profile_history_agent_debounce_minutes() -> float:
+    return app_config().get("profile_history", {}).get("agent_debounce_minutes", 15)

@@ -102,8 +102,9 @@ hirable/
 │     ├─ internal/             # INTERNAL routers (shared-secret): the agent tool callbacks
 │     ├─ llm/                  # llm_kit client factory + Pydantic schemas (Profile, Job, RenderCV)
 │     ├─ parsing/              # docling extraction + structured profile/job extraction
-│     ├─ rendercv/             # RenderCV YAML build + compile
-│     ├─ letters/              # cover-letter template + compile (M6 — likely Typst, see §8.4)
+│     ├─ rendercv/             # RenderCV YAML build + compile — CV (tailor/build) and cover
+│     │                        #   letter (letter.py) both live here; no separate letters/
+│     │                        #   package was needed (M6 reuses this pipeline, see §8.4)
 │     ├─ tracking/             # APScheduler jobs (stale/rejected), stage transitions
 │     └─ analytics/            # metric computations
 └─ agent/                      # agent_kit bootstrap (Python 3.13, uv-managed)
@@ -290,7 +291,7 @@ readable message.
 | `add_profile_item(section, item)` | Append one item to a list-type profile section, without clobbering existing items |
 | `record_clarification(key, value)` | Persist a clarifying-question answer into the profile's `enrichment` list (implemented as `add_profile_item` with `section="enrichment"`) |
 | `draft_cv(job_id, instructions?)` | **(M5, done)** Tailor + assemble a RenderCV YAML CV for a job and persist it as a new document version (§8.3) |
-| `draft_cover_letter(job_id)` | *(M6)* Produce cover-letter source for a job |
+| `draft_cover_letter(job_id, instructions?)` | **(M6, done)** Tailor + assemble a cover letter (reusing the CV's RenderCV/Typst pipeline) for a job and persist it as a new document version (§8.4) |
 | `list_application_status` | *(M7, optional)* Let the agent answer tracking questions |
 
 `get_profile` / `list_jobs` / `get_job` from the original catalogue were **dropped** — see §6.1;
@@ -447,13 +448,34 @@ should never touch is unnecessary hallucination risk on exactly the data that mu
 - User edits the YAML directly in-app (CodeMirror) → compile-preview → PDF renders inline. Compile
   errors are structured `{stage: "yaml"|"schema"|"render", errors: [...]}`, shown next to the editor.
 
-### 8.4 Cover letter (`draft_cover_letter` tool / `POST /api/documents/cover_letter`) — *(M6, pending)*
-- Draft source (company-first, JD-tied, concise per `good_resume.md` §12). **Typesetting approach TBD
-  at M6 planning time** — the original plan (a LaTeX letter template via TinyTeX, "for visual
-  consistency with the CV") no longer holds now that the CV itself renders via Typst, not LaTeX
-  (§8.3); the M6 letter should likely target Typst too (e.g. a RenderCV `TextEntry`-shaped section, or
-  a small standalone Typst template) rather than introducing a second, inconsistent toolchain.
-  Editable source + preview + versioning, same shape as §8.3.
+### 8.4 Cover letter (`draft_cover_letter` tool / `POST /api/documents/draft-cover-letter`) — **done, M6**
+Resolved the "TBD at M6 planning time" typesetting decision by **reusing the CV's RenderCV/Typst
+pipeline** rather than introducing a second toolchain (a standalone Typst letter template was
+considered and rejected — it would need its own compile path and editing surface, plus manual
+theme-matching):
+1. `llm.invoke(..., response_model=TailoredCoverLetter)` — **one** call (flat schema: `worth_it`,
+   `recipient`, `salutation`, `body_paragraphs: list[str]`, `closing` — confirmed against the real
+   Anthropic API, no Part-split needed, same reasoning as `JobModel`). Prose only, per
+   `good_resume.md` §12 (company-first, role understanding, 2–3 qualifications tied to the JD with
+   proof, named company); never re-emits facts (name, contact details, company name).
+2. `backend/app/rendercv/letter.py`'s `build_cover_letter_yaml` assembles the RenderCV YAML: contact
+   block via the same `build._build_contact` the CV uses (verbatim from the profile), one
+   `cv.sections` entry (`TextEntry` — a list of plain-string paragraphs: today's date, computed in
+   Python, never asked of the LLM; salutation; each body paragraph; closing + name), and the same
+   `design: {theme: <app.rendercv.theme config>}` as the CV — this is what makes the letter visually
+   consistent with the CV "for free." No `bold_keywords` (auto-bolding keywords in prose reads as
+   keyword stuffing, unlike in CV bullet highlights).
+3. Compile/edit/preview/versioning are **entirely unchanged** from §8.3 — `compile_pdf`,
+   `POST /api/documents/compile`, `PUT /api/documents/{id}`, and the CodeMirror-editor + `<iframe>`-
+   preview UI all already operate on `documents.source_text` regardless of `type`, so no new code
+   was needed there. `GET /api/documents` already took a `type` query param (default `"cv"`) since
+   M5, ready for `type=cover_letter` with no schema change.
+- Frontend: `frontend/components/cv-artifact.tsx` was generalized into
+  `frontend/components/document-artifact.tsx`'s `DocumentArtifact`, parameterized by
+  `documentType: "cv" | "cover_letter"` plus display strings — the job-detail page's Application tab
+  now renders two instances (CV, then cover letter, stacked).
+- `draft_cover_letter` is the only new agent tool (mirrors §6.2's `draft_cv` reasoning — compiling/
+  saving stay one-click UI actions, not agent tools).
 
 ### 8.5 Clarifying-question loop
 The agent compares the profile against `good_resume.md` to find gaps (missing numbers/impact, thin
@@ -612,11 +634,20 @@ callbacks and context feed backing §6.1/§6.2:
   Real Docker-image compile (vs. wheel-portability inspection) not verified in this environment — see
   CLAUDE.md's M5 gotchas.
 
-**M6 — Cover letter generation + editor**
-- `draft_cover_letter` (company-first, JD-tied); compile via Typst (not LaTeX — see §8.4's M5-driven
-  correction); editor + preview; versioning.
-- **Acceptance:** generate/edit/compile a cover letter; PDF is professional and visually consistent
-  with the CV.
+**M6 — Cover letter generation + editor** ✅
+- `draft_cover_letter` (company-first, JD-tied, §12); reuses the CV's RenderCV/Typst pipeline rather
+  than a second toolchain (§8.4's resolution of the "TBD" typesetting decision) — a `TailoredCoverLetter`
+  LLM call (flat schema, one `llm.invoke()`, confirmed against the real Anthropic API) + deterministic
+  YAML assembly (`build_cover_letter_yaml`, reusing `build._build_contact`); compile/edit/preview/
+  versioning are the same §8.3 code paths, unchanged.
+- Frontend: `cv-artifact.tsx` generalized into `document-artifact.tsx`'s `DocumentArtifact`
+  (parameterized by `documentType`), rendered twice (CV, then cover letter) in the job-detail page's
+  Application tab.
+- **Acceptance:** ✅ generate/edit/compile a cover letter via the agent tool AND the UI "Generate cover
+  letter" button; PDF is professional and visually consistent with the CV (same theme/fonts/header —
+  verified by rendering a real letter through the actual Typst compiler); cross-user isolation verified
+  for cover-letter documents (internal + public API); CV and cover-letter versions for the same job
+  number independently. 150 backend tests + 29 agent tests green; `npm run build` clean.
 
 **M7 — Application tracking + automation + finalized-doc history**
 - `applications` + stage-transition UI (kanban + table); on submit, **snapshot** finalized CV + cover

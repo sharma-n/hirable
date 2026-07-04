@@ -1034,7 +1034,7 @@ wheels = [
 [[package]]
 name = "llm-kit"
 version = "0.1.0"
-source = { git = "https://github.com/sharma-n/llm_kit.git#a4f494990993f53d201b59a831e7ed80d6dc8c8c" }
+source = { git = "https://github.com/sharma-n/llm_kit.git#8666da27a6f5c42e1fa37949ee32ce7cb34c70e1" }
 dependencies = [
     { name = "httpx", extra = ["http2"] },
     { name = "pydantic" },

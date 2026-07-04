@@ -8,14 +8,13 @@ ProfileModel's Part1/Part2 split.
 from __future__ import annotations
 
 import json
-from functools import lru_cache
-from pathlib import Path
 
 from fastapi import HTTPException
 from llm_kit import LLMClient, Message
 from llm_kit.errors import LLMError, ValidationError
 
 from app.llm.schemas import TailoredCV
+from app.rendercv.rules import good_resume_rules
 
 _SYSTEM_PROMPT_TEMPLATE = """You are a resume-tailoring assistant. Given a candidate's master \
 profile and a specific job posting, decide which profile items to feature in a tailored CV and \
@@ -64,20 +63,6 @@ Job posting:
 {instructions_block}"""
 
 
-@lru_cache(maxsize=1)
-def _good_resume_rules() -> str:
-    # Docker: docs/ mounted at /app/docs (see docker-compose.yml); local dev:
-    # docs/ lives at the repo root, three levels above this file.
-    here = Path(__file__).parent
-    for candidate in (here.parent.parent / "docs" / "good_resume.md", here.parent.parent.parent / "docs" / "good_resume.md"):
-        if candidate.exists():
-            return candidate.read_text()
-    raise RuntimeError(
-        "docs/good_resume.md not found. In Docker it should be mounted at /app/docs; "
-        "locally it should be at <repo root>/docs/good_resume.md."
-    )
-
-
 async def tailor_profile(
     llm: LLMClient,
     profile_data: dict,
@@ -85,7 +70,7 @@ async def tailor_profile(
     instructions: str | None = None,
 ) -> TailoredCV:
     """Call the LLM to produce a TailoredCV selection/rewrite for one job."""
-    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(good_resume_rules=_good_resume_rules())
+    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(good_resume_rules=good_resume_rules())
     instructions_block = f"\n\nAdditional instructions from the user:\n{instructions}" if instructions else ""
     user_message = _USER_MESSAGE_TEMPLATE.format(
         profile_json=json.dumps(profile_data),

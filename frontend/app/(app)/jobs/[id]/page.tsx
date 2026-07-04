@@ -7,7 +7,7 @@ import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AgentPanel } from "@/components/agent-panel";
-import { CvArtifact, type CvArtifactHandle } from "@/components/cv-artifact";
+import { DocumentArtifact, type DocumentArtifactHandle } from "@/components/document-artifact";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,8 +209,11 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | "loading" | null>("loading");
   const [showRawText, setShowRawText] = useState(false);
   const [cvHighlighted, setCvHighlighted] = useState(false);
-  const cvRef = useRef<CvArtifactHandle | null>(null);
-  const highlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [letterHighlighted, setLetterHighlighted] = useState(false);
+  const cvRef = useRef<DocumentArtifactHandle | null>(null);
+  const letterRef = useRef<DocumentArtifactHandle | null>(null);
+  const cvHighlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const letterHighlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<JobFormValues>({ defaultValues: EMPTY_FORM });
 
@@ -222,14 +225,21 @@ export default function JobDetailPage() {
     if (name === "draft_cv") {
       cvRef.current?.refetch();
       setCvHighlighted(true);
-      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
-      highlightTimeout.current = setTimeout(() => setCvHighlighted(false), 4000);
+      if (cvHighlightTimeout.current) clearTimeout(cvHighlightTimeout.current);
+      cvHighlightTimeout.current = setTimeout(() => setCvHighlighted(false), 4000);
+    }
+    if (name === "draft_cover_letter") {
+      letterRef.current?.refetch();
+      setLetterHighlighted(true);
+      if (letterHighlightTimeout.current) clearTimeout(letterHighlightTimeout.current);
+      letterHighlightTimeout.current = setTimeout(() => setLetterHighlighted(false), 4000);
     }
   }
 
   useEffect(() => {
     return () => {
-      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+      if (cvHighlightTimeout.current) clearTimeout(cvHighlightTimeout.current);
+      if (letterHighlightTimeout.current) clearTimeout(letterHighlightTimeout.current);
     };
   }, []);
 
@@ -357,7 +367,26 @@ export default function JobDetailPage() {
 
         {/* Application Tab */}
         <TabsContent value="application" className="flex-1 space-y-6">
-          <CvArtifact ref={cvRef} jobId={job.id} highlighted={cvHighlighted} />
+          <DocumentArtifact
+            ref={cvRef}
+            jobId={job.id}
+            documentType="cv"
+            title="CV"
+            emptyText="No CV drafted yet for this job. Generate one from your tailored profile, or ask the assistant to draft it in the chat."
+            generateLabel="Generate CV"
+            regenerateLabel="Regenerate"
+            highlighted={cvHighlighted}
+          />
+          <DocumentArtifact
+            ref={letterRef}
+            jobId={job.id}
+            documentType="cover_letter"
+            title="Cover letter"
+            emptyText="No cover letter drafted yet for this job. Generate one from your tailored profile, or ask the assistant to draft it in the chat."
+            generateLabel="Generate cover letter"
+            regenerateLabel="Regenerate"
+            highlighted={letterHighlighted}
+          />
         </TabsContent>
 
         {/* Job Details Tab */}

@@ -365,8 +365,18 @@ export async function apiDraftCv(jobId: string, instructions?: string): Promise<
   });
 }
 
-export async function apiListDocuments(jobId: string): Promise<DocumentListItem[]> {
-  return apiFetch<DocumentListItem[]>(`/api/documents?job_id=${jobId}`);
+export async function apiDraftCoverLetter(jobId: string, instructions?: string): Promise<DocumentDetail> {
+  return apiFetch<DocumentDetail>("/api/documents/draft-cover-letter", {
+    method: "POST",
+    body: JSON.stringify({ job_id: jobId, instructions: instructions || undefined }),
+  });
+}
+
+export async function apiListDocuments(
+  jobId: string,
+  type: "cv" | "cover_letter" = "cv",
+): Promise<DocumentListItem[]> {
+  return apiFetch<DocumentListItem[]>(`/api/documents?job_id=${jobId}&type=${type}`);
 }
 
 export async function apiGetDocument(documentId: string): Promise<DocumentDetail> {

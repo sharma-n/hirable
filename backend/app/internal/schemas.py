@@ -35,3 +35,14 @@ class DraftCvRequest(BaseModel):
 class DraftCvResponse(BaseModel):
     document_id: str
     version: int
+
+
+class DraftCoverLetterRequest(BaseModel):
+    user_id: str
+    job_id: str
+    instructions: str | None = None
+
+
+class DraftCoverLetterResponse(BaseModel):
+    document_id: str
+    version: int

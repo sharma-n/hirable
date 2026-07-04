@@ -8,7 +8,7 @@ from app.auth.dependencies import current_user, get_db
 from app.db.models import Document, Job, Profile, User
 from app.llm.deps import get_llm
 from app.rendercv.compile import CompileError, compile_pdf
-from app.rendercv.service import draft_cv_document
+from app.rendercv.service import draft_cover_letter_document, draft_cv_document
 from app.schemas import (
     DocumentCompileRequest,
     DocumentDraftRequest,
@@ -46,6 +46,20 @@ async def draft_cv(
     if profile is None:
         raise HTTPException(status_code=404, detail="No profile found. Upload a resume first.")
     return await draft_cv_document(db, llm, job, profile, body.instructions)
+
+
+@router.post("/draft-cover-letter", response_model=DocumentOut, status_code=201)
+async def draft_cover_letter(
+    body: DocumentDraftRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    llm: LLMClient = Depends(get_llm),
+) -> Document:
+    job = _get_job_or_404(db, body.job_id, user.id)
+    profile: Profile | None = db.query(Profile).filter_by(user_id=user.id).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="No profile found. Upload a resume first.")
+    return await draft_cover_letter_document(db, llm, job, profile, body.instructions)
 
 
 @router.get("", response_model=list[DocumentListItemOut])

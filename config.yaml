@@ -48,6 +48,7 @@ tools:
     - add_profile_item
     - record_clarification
     - draft_cv
+    - draft_cover_letter
 
 mcp:
   servers: []

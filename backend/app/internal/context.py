@@ -41,7 +41,11 @@ _JOB_MODE_INSTRUCTIONS = (
     "clarifying questions and persist every answer via record_clarification, "
     "add_profile_item, or update_profile_section. Once the profile has enough to work "
     "with (or the user asks for a CV), offer to draft a tailored CV for this job via "
-    "the draft_cv tool, passing this job's id shown above."
+    "the draft_cv tool, passing this job's id shown above. You can also draft a cover "
+    "letter via the draft_cover_letter tool (same job_id argument) — per good_resume.md "
+    "§12, a cover letter mostly helps at small/mid-size companies and startups where a "
+    "person screens applications (big tech rarely reads them), so mention that "
+    "trade-off if relevant, but still draft one whenever the user asks."
 )
 
 _JOB_NOT_FOUND_BLOCK = (
@@ -96,10 +100,25 @@ def build_context(db: Session, user_id: str, conversation_id: str) -> str:
             else "No CV has been drafted for this job yet."
         )
 
+        latest_letter: Document | None = (
+            db.query(Document)
+            .filter_by(user_id=user_id, job_id=job.id, type="cover_letter")
+            .order_by(Document.version.desc())
+            .first()
+        )
+        letter_block = (
+            f"A draft cover letter already exists for this job (version {latest_letter.version}, "
+            f"created {latest_letter.created_at.isoformat()}). Calling draft_cover_letter again "
+            f"creates a new version — only do so if asked or if there's new information to reflect."
+            if latest_letter is not None
+            else "No cover letter has been drafted for this job yet."
+        )
+
         return (
             f"Current master profile:\n{profile_block}\n\n"
             f"Job posting (id={job.id}):\n{json.dumps(job.parsed)}\n\n"
             f"{cv_block}\n\n"
+            f"{letter_block}\n\n"
             f"{_JOB_MODE_INSTRUCTIONS}"
         )
 

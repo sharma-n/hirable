@@ -34,12 +34,14 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M5 are complete** (three-service
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M6 are complete** (three-service
 skeleton + one-command setup; full auth + session management + admin console + UI redesign;
 resume upload → master profile; job ingest by URL/paste → shortlist; contextual agent panels
 with profile-enrichment write tools — see SPEC.md §6.0 for the chat-tab → embedded-panel pivot;
 tailored CV generation + YAML editor + on-demand PDF preview + profile version history/undo —
-see SPEC.md §8.3/§6.6 and this file's M5 gotchas for the Typst-not-TinyTeX correction).
+see SPEC.md §8.3/§6.6 and this file's M5 gotchas for the Typst-not-TinyTeX correction; tailored
+cover-letter generation reusing the CV's RenderCV/Typst pipeline — see SPEC.md §8.4 and this
+file's M6 gotchas for the "reuse RenderCV YAML, don't build a second toolchain" decision).
 
 ---
 
@@ -202,17 +204,17 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
 | `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
 | `backend/app/api/jobs.py` | `POST /` (url/paste ingest + `needs_paste` signal), `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` — all scoped to `current_user` |
-| `backend/app/internal/` | Secret-gated `/internal/*` routes: `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode, plus M5's "a CV already exists at v{n}" hint in job mode), `profile.py` (`update-section`, `add-item` — now snapshot via `db/profile_history.py` before writing), `documents.py` (M5: `draft-cv`, backs the agent tool), `deps.py` (`verify_internal_secret`) |
+| `backend/app/internal/` | Secret-gated `/internal/*` routes: `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode, plus M5's "a CV already exists at v{n}" hint and M6's matching cover-letter hint in job mode), `profile.py` (`update-section`, `add-item` — now snapshot via `db/profile_history.py` before writing), `documents.py` (M5: `draft-cv`; M6: `draft-cover-letter` — both back their agent tools), `deps.py` (`verify_internal_secret`) |
 | `backend/app/db/profile_history.py` | M5: `snapshot_profile` (unconditional, user saves) / `snapshot_for_agent_write` (debounced, agent writes) + prune-to-`max_versions` |
-| `backend/app/rendercv/` | M5: `tailor.py` (`TailoredCV` LLM call), `build.py` (deterministic YAML assembly from profile+tailored+job), `compile.py` (in-process Typst compile, `CompileError` w/ yaml/schema/render stage), `service.py` (`draft_cv_document` — shared by internal route + public API) |
-| `backend/app/api/documents.py` | M5: `POST /draft`, `GET ""` (list, job-scoped), `GET/PUT/DELETE /{id}`, `POST /compile` (stateless, source-text-in/PDF-bytes-out) — all scoped to `current_user` |
+| `backend/app/rendercv/` | M5: `tailor.py` (`TailoredCV` LLM call), `build.py` (deterministic YAML assembly from profile+tailored+job), `compile.py` (in-process Typst compile, `CompileError` w/ yaml/schema/render stage), `service.py` (`draft_cv_document`/`draft_cover_letter_document` — shared by internal routes + public API); M6: `letter.py` (`TailoredCoverLetter` LLM call + `build_cover_letter_yaml`, reusing `build._build_contact`), `rules.py` (shared `good_resume_rules()` loader, extracted from `tailor.py` so `letter.py` doesn't duplicate it) |
+| `backend/app/api/documents.py` | M5: `POST /draft`, `GET ""` (list, job-scoped, `type` query param), `GET/PUT/DELETE /{id}`, `POST /compile` (stateless, source-text-in/PDF-bytes-out); M6: `POST /draft-cover-letter` — all scoped to `current_user` |
 | `frontend/app/(app)/profile/` | Split-screen: `AgentPanel` (conversationBase=`"profile"`) + resume dropzone / section-by-section profile editor; live-refreshes + highlights sections the agent just wrote; M5: `VersionHistorySection` (list + restore, `AlertDialog` confirm) |
-| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5: `CvArtifact` (replaces the M4 placeholder) |
+| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5/M6: two `DocumentArtifact`s (CV, then cover letter, stacked in the Application tab) |
 | `frontend/components/agent-panel.tsx` | Reusable chat panel (M4): WS connect, ordered text/tool_call/tool_result message parts (markdown-rendered via `react-markdown`), model picker, "new chat" generation-suffix button, one-click `starterPrompt` chip, localStorage transcript persistence keyed by `conversationId` |
-| `frontend/components/cv-artifact.tsx` | M5: CodeMirror YAML editor + `<iframe>` PDF preview (blob URL, no PDF-viewer dep) + version picker; exposes an imperative `refetch()` handle (`forwardRef`/`useImperativeHandle`) so the job-detail page can refresh it from `AgentPanel`'s `onToolResult` on `draft_cv` |
+| `frontend/components/document-artifact.tsx` | M5 (as `cv-artifact.tsx`), generalized in M6 into `DocumentArtifact` parameterized by `documentType: "cv" \| "cover_letter"` + display strings: CodeMirror YAML editor + `<iframe>` PDF preview (blob URL, no PDF-viewer dep) + version picker; exposes an imperative `refetch()` handle (`forwardRef`/`useImperativeHandle`) so the job-detail page can refresh either instance from `AgentPanel`'s `onToolResult` on `draft_cv`/`draft_cover_letter` |
 | `frontend/components/ui/textarea.tsx` | Native textarea with base-nova Tailwind styling |
 | `agent/bootstrap.py` | Builds `AgentService` with `extra_tools`/`system_prompt_fn`, embeds `good_resume.md`, secret middleware, /health |
-| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient` + `post_json`/`error_detail` helpers, relocated here in M5 so `documents.py` doesn't cross-import `profile.py`'s privates), `profile.py` (the 3 write tools), `documents.py` (M5: `draft_cv` tool), `context.py` (`build_system_prompt_fn`) |
+| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient` + `post_json`/`error_detail` helpers, relocated here in M5 so `documents.py` doesn't cross-import `profile.py`'s privates), `profile.py` (the 3 write tools), `documents.py` (M5: `draft_cv` tool; M6: `draft_cover_letter` tool), `context.py` (`build_system_prompt_fn`) |
 | `frontend/app/(app)/` | Authenticated route group: profile, jobs, admin (layout enforces session cookie) — no chat route (see CLAUDE.md's M4 notes) |
 | `frontend/app/(auth)/` | Auth route group: login, signup (layout redirects if already authed) |
 | `frontend/components/app-shell.tsx` | Sticky nav (Profile/Jobs/Admin) + theme toggle + user dropdown |
@@ -264,7 +266,7 @@ preferentially.
 | M3 — jobs shortlist | **Done** | trafilatura fetch+extract with `needs_paste` fallback signal; flat `JobModel` designed for a single `llm.invoke()` call (no Part1/Part2 split, unlike `ProfileModel`) — verified with mocked LLM in tests, **not yet confirmed against the real Anthropic API**; list+detail UI; no `shortlist_status`/no versioning by design (deferred to M7) |
 | M4 — contextual agent panels + profile-enrichment tools | **Done** | Design pivot: no standalone chat tab — `AgentPanel` embedded split-screen in profile + job-detail pages; 3 write-only tools (`update_profile_section`, `add_profile_item`, `record_clarification`) — no read tools, profile/job context injected per-turn via `system_prompt_fn` instead |
 | M5 — CV generation + editor + PDF + profile version history | **Done** | Deterministic-skeleton + LLM-tailoring (`TailoredCV`, one call — no Part-split needed); RenderCV renders via **Typst, not TinyTeX** (corrects the original plan — see M5 gotchas); DB-only document storage (no PDFs ever on disk); `draft_cv` is the only new agent tool (`compile_document`/`save_document` dropped — one-click UI actions instead); profile version history/undo added to scope mid-planning |
-| M6 — cover letter | Pending | Typesetting approach TBD — likely Typst too, for consistency with M5's CV (not the originally-planned LaTeX/TinyTeX) |
+| M6 — cover letter | **Done** | Resolved the §8.4 "TBD" typesetting decision: the cover letter **reuses the CV's RenderCV/Typst pipeline** (contact header + one `TextEntry` section of prose paragraphs) rather than a second toolchain — see M6 gotchas. `TailoredCoverLetter` (flat schema, one `llm.invoke()` call, confirmed against the real Anthropic API). `draft_cover_letter` is the only new agent tool; UI reuses the generalized `DocumentArtifact` component stacked below the CV in the job-detail page's Application tab |
 | M7 — application tracking + automation | Pending | |
 | M8 — analytics dashboard | Pending | |
 | M9 — polish, hardening, docs | Pending | |
@@ -688,3 +690,53 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   neither needs anything beyond what `uv pip install --system -e .` already does in the existing
   Dockerfile. **This is inference from wheel metadata, not a live Docker build — re-verify with an
   actual `docker compose up` before relying on it for a real deployment.**
+
+## Gotchas encountered during M6
+
+- **Resolved SPEC §8.4's "TBD at M6 planning time" typesetting decision: the cover letter reuses
+  the CV's RenderCV/Typst pipeline instead of a second toolchain.** The alternative considered (a
+  dedicated Typst letter template with true business-letter layout) was rejected — it would need a
+  second compile path (`typst.compile` called directly, dispatched on `documents.source_format`)
+  and a second editing surface, plus manual work to match the CV's theme/fonts. Reusing RenderCV
+  means the letter is just a `cv:` document whose `sections` has one `TextEntry` (plain-string)
+  entry — `compile_pdf`, the CodeMirror editor, the `<iframe>` preview, and append-only versioning
+  are **all reused completely unchanged**; the letter automatically matches the CV's theme because
+  both pass the same `rendercv_theme()` into `design.theme`. Confirmed by rendering a real letter
+  through the actual Typst compiler and inspecting the PDF: the header (name/contact) is identical
+  in style to the CV, and the "Cover Letter" section renders as a normal RenderCV section title —
+  reads as a clean, professional single-column document, not as an awkward CV imitating a letter.
+- **`_build_contact` (originally private to `build.py`) is imported directly by `letter.py`** rather
+  than duplicated or made public — both the CV and the cover letter need the exact same verbatim
+  contact-field mapping (same phone/website/social-network validation), and Python doesn't enforce
+  the underscore-prefix privacy convention within a package. Similarly, the `good_resume.md` loader
+  that used to live inline in `tailor.py` was extracted into `app/rendercv/rules.py`
+  (`good_resume_rules()`) so `letter.py` doesn't duplicate the Docker-vs-repo-root path-resolution
+  logic — `tailor.py` now imports it too.
+- **`TailoredCoverLetter` is deliberately flat** (all scalars + one `list[str]`, no nested
+  list-of-object fields) for the same reason `JobModel` is — this kept it under Anthropic's
+  structured-output grammar-size limit in a single `llm.invoke()` call, confirmed against the real
+  API (no 400, no Part-split needed). If a future revision adds nested per-paragraph structure
+  (e.g. a `{tone, paragraph}` object instead of a bare string), re-run the grammar-size smoke test
+  per the established `ProfileModel`/`JobModel`/`TailoredCV` precedent rather than assuming margin.
+- **The tailoring prompt's paragraph count is a soft target, not a hard schema constraint** — since
+  `body_paragraphs` is just `list[str]`, nothing stops the model from collapsing everything into a
+  single paragraph on a given sampling (observed once in ad hoc smoke-testing, though a repeat run
+  with the same inputs produced the intended 3–4 paragraph §12 structure — company-first, role
+  understanding, JD-tied qualifications with real proof, closing). This is normal LLM sampling
+  variance for free-form prose (unlike `TailoredCV`'s structured index-based fields, there's no
+  deterministic fallback to enforce paragraph count) — not a bug to fix, just worth knowing if a
+  generated letter ever reads as one dense block: regenerating typically produces the intended
+  structure.
+- **No `bold_keywords` setting on the cover-letter YAML**, unlike the CV — `build_cover_letter_yaml`
+  intentionally omits `settings.bold_keywords` (which `build_rendercv_yaml` sets from the job's
+  `keywords[]`) because auto-bolding scattered keywords inside prose paragraphs reads as keyword
+  stuffing in a letter, whereas it's a legitimate scanning aid in bullet-point CV highlights.
+- **The cover-letter date line is computed in Python (`datetime.now(timezone.utc)`), not requested
+  from the LLM** — `TailoredCoverLetter` has no date field; letting the model state "today's date"
+  would be an unnecessary hallucination surface (it doesn't reliably know the true current date)
+  for a fact Python already has correctly. Formatted as `"{Month} {day}, {year}"` (e.g. "July 4,
+  2026") via manual `strftime` component assembly rather than platform-specific format codes —
+  `%-d` (no leading zero) works on Linux/Mac `strftime` but is not portable to Windows, and since
+  the day number was needed without a leading zero, `f"{now:%B} {now.day}, {now:%Y}"` sidesteps the
+  portability question entirely rather than relying on a flag that happens to work in the
+  `python:3.13-slim` Docker image.

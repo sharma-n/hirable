@@ -293,6 +293,35 @@ class TailoredCV(BaseModel):
     extras: list[int] = Field(default_factory=list)
 
 
+class TailoredCoverLetter(BaseModel):
+    """LLM output for cover-letter tailoring — pure prose, no facts re-emitted
+    (contact details come from the profile verbatim in Python, same as
+    ``TailoredCV`` — see ``backend/app/rendercv/letter.py``). Flat schema (all
+    scalars + one ``list[str]``), so — like ``JobModel`` — this is expected to
+    fit a single ``llm.invoke()`` call without the ``ProfileModel``-style
+    Part1/Part2 split; re-run the grammar-size smoke test if this schema grows
+    nested fields.
+
+    ``worth_it`` follows good_resume.md §12: a cover letter mainly helps at
+    small/mid-size companies and startups where a human screens applications;
+    big tech rarely reads them. The LLM sets this based on the job's
+    ``company_type``, but the tool always generates one if asked — it's
+    advisory only, surfaced to the user, never a hard block.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra=_require(
+            "worth_it", "recipient", "salutation", "body_paragraphs", "closing"
+        )
+    )
+
+    worth_it: bool = True
+    recipient: str = ""  # e.g. "Hiring Manager" or a named person from the JD
+    salutation: str = ""  # e.g. "Dear Hiring Manager,"
+    body_paragraphs: list[str] = Field(default_factory=list)  # §12: company-first, JD-tied, proof
+    closing: str = ""  # e.g. "Sincerely,"
+
+
 class JobModel(BaseModel):
     """Structured extraction of a job posting — see ``parsing/jobs.py``.
 

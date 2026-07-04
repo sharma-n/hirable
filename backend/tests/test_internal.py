@@ -7,7 +7,7 @@ import pytest
 
 from app.db.models import Document, Job, Profile
 from app.llm.deps import get_llm
-from app.llm.schemas import ProfileModel, TailoredCV
+from app.llm.schemas import ProfileModel, TailoredCoverLetter, TailoredCV
 from app.main import app
 
 _SECRET = "test-internal-secret"
@@ -138,6 +138,18 @@ class TestContext:
         context = r.json()["context"]
         assert "Experienced engineer." in context
         assert "Acme" in context
+
+    def test_job_mode_mentions_no_cover_letter_drafted_yet(self, client, db_session):
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+        job = _seed_job(db_session, user["id"])
+
+        r = client.post(
+            "/internal/context",
+            json={"user_id": user["id"], "conversation_id": f"job:{job.id}"},
+            headers=_headers(),
+        )
+        assert "No cover letter has been drafted for this job yet." in r.json()["context"]
 
     def test_job_mode_foreign_job_id_returns_not_found_block(self, client, db_session):
         user_a = _signup(client, "a@example.com")
@@ -278,6 +290,27 @@ def patched_llm_client(client):
     app.dependency_overrides.pop(get_llm, None)
 
 
+def _fake_tailored_cover_letter() -> TailoredCoverLetter:
+    return TailoredCoverLetter(
+        worth_it=True,
+        recipient="Hiring Manager",
+        salutation="Dear Hiring Manager,",
+        body_paragraphs=["Paragraph one.", "Paragraph two."],
+        closing="Sincerely,",
+    )
+
+
+@pytest.fixture()
+def patched_letter_llm_client(client):
+    fake_response = MagicMock()
+    fake_response.parsed = _fake_tailored_cover_letter()
+    fake_llm = MagicMock()
+    fake_llm.invoke = AsyncMock(return_value=fake_response)
+    app.dependency_overrides[get_llm] = lambda: fake_llm
+    yield client, fake_llm
+    app.dependency_overrides.pop(get_llm, None)
+
+
 class TestDraftCv:
     def test_creates_document_v1(self, patched_llm_client, db_session):
         client, _ = patched_llm_client
@@ -360,6 +393,64 @@ class TestDraftCvIsolation:
 
         r = client.post(
             "/internal/documents/draft-cv",
+            json={"user_id": user_b["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.status_code == 404
+
+
+class TestDraftCoverLetter:
+    def test_creates_document_v1(self, patched_letter_llm_client, db_session):
+        client, _ = patched_letter_llm_client
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+        job = _seed_job(db_session, user["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cover-letter",
+            json={"user_id": user["id"], "job_id": job.id},
+            headers=_headers(),
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["version"] == 1
+
+        doc = db_session.query(Document).filter_by(id=r.json()["document_id"]).first()
+        assert doc.user_id == user["id"]
+        assert doc.job_id == job.id
+        assert doc.type == "cover_letter"
+        assert "cv:" in doc.source_text
+
+    def test_missing_job_returns_404(self, patched_letter_llm_client, db_session):
+        client, _ = patched_letter_llm_client
+        user = _signup(client, "a@example.com")
+        _seed_profile(db_session, user["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cover-letter",
+            json={"user_id": user["id"], "job_id": "no-such-job"},
+            headers=_headers(),
+        )
+        assert r.status_code == 404
+
+    def test_missing_secret_rejected(self, client):
+        r = client.post(
+            "/internal/documents/draft-cover-letter", json={"user_id": "u", "job_id": "j"}
+        )
+        assert r.status_code == 403
+
+
+class TestDraftCoverLetterIsolation:
+    def test_user_b_cannot_draft_cover_letter_for_user_a_job(self, patched_letter_llm_client, db_session):
+        client, _ = patched_letter_llm_client
+        user_a = _signup(client, "a@example.com")
+        _seed_profile(db_session, user_a["id"])
+        job = _seed_job(db_session, user_a["id"])
+
+        user_b = _signup(client, "b@example.com")
+        _seed_profile(db_session, user_b["id"])
+
+        r = client.post(
+            "/internal/documents/draft-cover-letter",
             json={"user_id": user_b["id"], "job_id": job.id},
             headers=_headers(),
         )

@@ -10,14 +10,20 @@ from __future__ import annotations
 import httpx
 from agent_kit.tools.base import Tool
 
-from .documents import draft_cv_tool
+from .documents import draft_cover_letter_tool, draft_cv_tool
 from .profile import (
     add_profile_item_tool,
     record_clarification_tool,
     update_profile_section_tool,
 )
 
-TOOL_NAMES = ["update_profile_section", "add_profile_item", "record_clarification", "draft_cv"]
+TOOL_NAMES = [
+    "update_profile_section",
+    "add_profile_item",
+    "record_clarification",
+    "draft_cv",
+    "draft_cover_letter",
+]
 
 
 def build_tools(client: httpx.AsyncClient) -> list[Tool]:
@@ -26,4 +32,5 @@ def build_tools(client: httpx.AsyncClient) -> list[Tool]:
         add_profile_item_tool(client),
         record_clarification_tool(client),
         draft_cv_tool(client),
+        draft_cover_letter_tool(client),
     ]

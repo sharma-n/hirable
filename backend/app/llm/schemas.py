@@ -202,11 +202,16 @@ class ProfileModelPart2(BaseModel):
 
 
 class TailoredEntry(BaseModel):
-    """Tailoring decision for one experience/project item, referenced by its
-    index into the master profile's list. The LLM never re-emits company
-    names, dates, or links — only which items to include (by index, in CV
-    order) and how to reword their summary/highlights for this job. See
-    ``backend/app/rendercv/tailor.py``."""
+    """Tailoring decision for one **project** item, referenced by its index
+    into the master profile's ``projects`` list. Presence-based selection: the
+    LLM returns an entry only for projects worth including (projects are
+    legitimately skippable — see §8.3). The LLM never re-emits names, dates, or
+    links — only which projects to include (by index, in CV order) and how to
+    reword their summary/highlights. See ``backend/app/rendercv/tailor.py``.
+
+    (Experience uses ``TailoredExperienceEntry`` instead — experience is
+    include-all-by-default, not presence-based, because a silently dropped job
+    creates an unexplained employment gap.)"""
 
     model_config = ConfigDict(json_schema_extra=_require("index", "summary", "highlights"))
 
@@ -215,7 +220,30 @@ class TailoredEntry(BaseModel):
     highlights: list[str] = Field(default_factory=list)
 
 
+class TailoredExperienceEntry(BaseModel):
+    """Tailoring decision for one experience item. Unlike projects, experience
+    is **include-all-by-default**: ``build.py`` iterates every profile
+    experience and keeps it unless this entry explicitly sets ``include=False``
+    *and* the role is old enough to be droppable (a server-side recency floor
+    refuses to drop anything within the last 5 years / ongoing / undatable).
+    ``include`` defaults ``True`` so a missing or partial LLM response is safe —
+    the job is kept, never silently lost. The LLM never re-emits company names
+    or dates; only the include decision plus a reworded summary/highlights."""
+
+    model_config = ConfigDict(json_schema_extra=_require("index", "include", "summary", "highlights"))
+
+    index: int
+    include: bool = True
+    summary: str = ""
+    highlights: list[str] = Field(default_factory=list)
+
+
 class TailoredEducationEntry(BaseModel):
+    """Tailoring decision for one education item. Education is **always
+    included** — this carries only a reworded ``highlights`` for the entry at
+    ``index``; ``build.py`` renders every profile education entry regardless of
+    whether the LLM returned a rewrite for it (a degree is never dropped)."""
+
     model_config = ConfigDict(json_schema_extra=_require("index", "highlights"))
 
     index: int
@@ -227,14 +255,25 @@ class TailoredCV(BaseModel):
     profile's content for one job, never the facts themselves (dates, company
     names, emails, URLs are copied verbatim from the profile in Python — see
     ``backend/app/rendercv/build.py``). Index-based selection keeps this schema
-    far lighter than ``ProfileModel`` per item (2-3 fields vs. 7-9) and
-    structurally rules out factual hallucination.
+    far lighter than ``ProfileModel`` per item (2-4 fields vs. 7-9) and
+    structurally rules out factual hallucination of the structured fields.
+
+    Presence semantics differ per section (see §8.3):
+    - ``experience`` — **include-all**: one ``TailoredExperienceEntry`` per
+      profile experience, kept unless it explicitly opts out via ``include`` AND
+      passes the recency floor in ``build.py``. A dropped job is a deliberate,
+      logged decision, never a silent omission.
+    - ``education`` — **always included**: rewrites-only; ``build.py`` renders
+      every degree regardless.
+    - ``projects`` / ``publications`` / ``extras`` — presence-based selection
+      (legitimately skippable): only the returned indices are rendered.
 
     Unlike ``ProfileModel``, this fits in a single ``llm.invoke()`` call —
     confirmed against the real Anthropic API with an 8-experience/4-project
-    profile (502 completion tokens, no grammar-size 400). If a future field
-    addition makes this schema heavier, re-bisect per ``ProfileModel``'s
-    Part1/Part2 precedent rather than assuming margin still exists.
+    profile (502 completion tokens, no grammar-size 400). Adding the ``include``
+    bool to ``TailoredExperienceEntry`` is negligible schema weight, but per the
+    ``ProfileModel`` precedent, re-run the grammar-size smoke test rather than
+    assuming margin still exists if this schema grows heavier.
     """
 
     model_config = ConfigDict(
@@ -247,7 +286,7 @@ class TailoredCV(BaseModel):
     summary: str = ""
     section_order: list[str] = Field(default_factory=list)
     skills: list[SkillItem] = Field(default_factory=list)
-    experience: list[TailoredEntry] = Field(default_factory=list)
+    experience: list[TailoredExperienceEntry] = Field(default_factory=list)
     projects: list[TailoredEntry] = Field(default_factory=list)
     education: list[TailoredEducationEntry] = Field(default_factory=list)
     publications: list[int] = Field(default_factory=list)

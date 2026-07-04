@@ -656,10 +656,31 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 - **Grammar-limit smoke test confirmed `TailoredCV` fits in a single `llm.invoke()` call** — unlike
   `ProfileModel`, which needed the Part1/Part2 split. Verified against the real Anthropic API with an
   8-experience/4-project synthetic profile (502 completion tokens, well under `max_tokens: 4096`, no
-  400). The schema's index-based selection (`{index, summary, highlights}` per item, 2-3 fields) is
+  400). The schema's index-based selection (`{index, summary, highlights}` per item, 2-4 fields) is
   much lighter per-item than `ProfileModel`'s item schemas (7-9 fields) — this is *why* it fits, not
   a coincidence, but **re-run the same smoke-test pattern if `TailoredCV` ever grows heavier fields**,
-  per the same rule already established for `ProfileModel`/`JobModel`.
+  per the same rule already established for `ProfileModel`/`JobModel`. (The post-M5 `include` bool
+  added to `TailoredExperienceEntry` — see next bullet — was re-smoke-tested against the real
+  Anthropic API with the same 8-experience/4-project profile shape: no grammar-size 400, and the model
+  correctly returned a decision for all 8 roles, setting `include=False` only on the single oldest
+  (pre-2011) role while keeping all 7 more-recent ones — confirming both the schema fits and the
+  prompt's "only drop old, never recent" instruction is followed in practice.)
+- **Post-M5: experience & education are include-all, not LLM-selectable — silent omission was a bug.**
+  Original M5 made `TailoredCV.experience`/`.education` pure index-*selections*, so the model could
+  drop an entire job or degree just by not returning its index (unexplained employment gaps / missing
+  degrees). Now: `build.py`'s `_build_experience_section` iterates **every** profile experience in
+  profile order and `_build_education_section` iterates **every** education entry; both fall back to
+  the profile's own summary/highlights when the model returns no rewrite for that index (so nothing is
+  ever silently lost). Experience carries an explicit per-role `include` flag (`TailoredExperienceEntry`,
+  default `True`) — a drop is honored **only** when `include=False` AND `_role_is_recent()` is false
+  (server-side floor: ongoing / ended-within-`_RECENT_YEARS`=5 / undatable ⇒ always kept, overriding
+  the model). The tailoring prompt tells the model to set `include=false` only for early unrelated
+  roles >5 years old, never recent ones. Projects/publications/extras stay presence-based selection
+  (legitimately skippable). Facts (dates/company/institution/degree) were already copied verbatim by
+  index — that never changed; this fix is purely about **presence**, plus one prompt line forbidding
+  fabricated numbers/dates/employers in the free-text bullets (the only remaining hallucination
+  surface). **Design principle: the LLM tailors and may explicitly justify dropping an old role; the
+  human curates (deletes roles manually in the YAML editor). Silent omission is never allowed.**
 - **Full `docker compose up` was not verified in the environment this milestone was implemented in**
   — Docker wasn't reachable (WSL2 without the Docker Desktop WSL integration enabled). Confidence
   that the Docker build will still work rests on inspecting the installed wheels directly: `typst` is

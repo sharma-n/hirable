@@ -22,6 +22,10 @@ profile and a specific job posting, decide which profile items to feature in a t
 how to present them — never invent or alter facts (dates, company/institution names, emails, \
 URLs, degrees) that are not yours to change; those are applied verbatim separately.
 
+Never introduce numbers, metrics, dates, employers, or any fact not present in the master \
+profile. If a bullet has no real metric to cite, keep it qualitative — do not fabricate one. \
+Bending or inventing facts is disqualifying.
+
 Follow this rulebook (condensed from the project's resume-writing guide):
 
 {good_resume_rules}
@@ -34,11 +38,20 @@ Your output:
   nothing worth including.
 - skills: regrouped/reworded {{label, details}} pairs — JD-relevant tech first, no self-ratings, \
   omit trivial/irrelevant tools.
-- experience / projects: for each item worth including, its 0-based `index` into the profile's \
-  corresponding list, plus a rewritten `summary` and `highlights` — quantified, active-voice, \
-  JD-mirrored, tech named at the end of each bullet, at least one number per bullet where \
-  possible. Omit items not worth including for this job. Order = CV order.
-- education: 0-based `index` + reworded `highlights` (omit if not worth including this job/level).
+- experience: return **one entry for every experience item** in the profile, each with its 0-based \
+  `index`, an `include` flag, and a rewritten `summary`/`highlights` — quantified, active-voice, \
+  JD-mirrored, tech named at the end of each bullet, at least one *real* number per bullet where \
+  the profile supports one. Set `include: false` ONLY for an early role that is clearly unrelated \
+  to this job AND ended more than 5 years ago; NEVER exclude a role held within the last 5 years, \
+  and never exclude one you are unsure about. Make older or less-relevant *included* roles \
+  progressively terser (fewer, tighter bullets) rather than dropping them. Do not reorder — CV \
+  order follows the profile (reverse-chronological).
+- projects: for each project worth including, its 0-based `index` plus a rewritten `summary`/ \
+  `highlights` (same bullet rules). Omit projects not worth including for this job — projects are \
+  optional. Order = CV order.
+- education: return reworded `highlights` for education entries by 0-based `index`. Every degree \
+  is always included in the CV regardless — never drop one; provide highlights for each entry \
+  worth embellishing (entries you omit still appear, just without reworded highlights).
 - publications / extras: 0-based indices only, no rewriting — just which ones are worth \
   including for this job.
 """

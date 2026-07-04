@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-from app.llm.schemas import TailoredCV, TailoredEducationEntry, TailoredEntry
+from app.llm.schemas import (
+    TailoredCV,
+    TailoredEducationEntry,
+    TailoredEntry,
+    TailoredExperienceEntry,
+)
 from app.rendercv.build import build_rendercv_yaml
 from app.rendercv.compile import CompileError, compile_pdf
 from app.rendercv.tailor import tailor_profile
@@ -100,7 +105,7 @@ def _tailored(**overrides) -> TailoredCV:
         summary="Tailored: quantified summary.",
         section_order=["experience", "projects", "education", "skills"],
         skills=[],
-        experience=[TailoredEntry(index=0, summary="Tailored role", highlights=["Did X: measured by Y"])],
+        experience=[TailoredExperienceEntry(index=0, summary="Tailored role", highlights=["Did X: measured by Y"])],
         projects=[],
         education=[TailoredEducationEntry(index=0, highlights=["GPA: 3.9"])],
         publications=[0],
@@ -158,32 +163,84 @@ class TestBuildRenderCVYaml:
         assert "date" not in entry
 
     def test_free_form_date_used_when_no_start_date(self):
+        # Every experience renders in profile order; index 1 (Second Co) has only
+        # a free-form date, so it lands at position 1 and uses `date`.
         tailored = _tailored(
-            experience=[TailoredEntry(index=1, summary="s", highlights=["h"])]
+            experience=[TailoredExperienceEntry(index=1, summary="s", highlights=["h"])]
         )
         text = build_rendercv_yaml(_PROFILE, tailored, _JOB, "engineeringresumes")
         doc = yaml.safe_load(text)
-        entry = doc["cv"]["sections"]["Experience"][0]
+        entry = doc["cv"]["sections"]["Experience"][1]
+        assert entry["company"] == "Second Co"
         assert entry["date"] == "2022 - present"
         assert "start_date" not in entry
 
     def test_empty_sections_omitted(self):
+        # Projects/publications/extras are presence-based → empty means omitted.
+        # Education is always-include, so it is NOT omitted here (see its own test).
         tailored = _tailored(projects=[], education=[], publications=[], extras=[], skills=[])
         text = build_rendercv_yaml(_PROFILE, tailored, _JOB, "engineeringresumes")
         doc = yaml.safe_load(text)
         sections = doc["cv"].get("sections", {})
         assert "Projects" not in sections
-        assert "Education" not in sections
         assert "Publications" not in sections
         assert "Extras" not in sections
 
     def test_out_of_range_index_skipped_without_crash(self):
+        # A bogus index is ignored, but every real experience still renders with
+        # its own (fallback) content — nothing is silently dropped.
         tailored = _tailored(
-            experience=[TailoredEntry(index=99, summary="s", highlights=["h"])]
+            experience=[TailoredExperienceEntry(index=99, summary="s", highlights=["h"])]
         )
         text = build_rendercv_yaml(_PROFILE, tailored, _JOB, "engineeringresumes")
         doc = yaml.safe_load(text)
-        assert "Experience" not in doc["cv"].get("sections", {})
+        experience = doc["cv"]["sections"]["Experience"]
+        assert [e["company"] for e in experience] == ["Acme: The Company", "Second Co"]
+        assert experience[0]["highlights"] == ["Old highlight"]  # profile fallback
+
+    def test_all_experiences_included_with_partial_decisions(self):
+        # LLM returns a decision only for index 0; index 1 must still appear,
+        # using the profile's own summary/highlights as fallback.
+        text = build_rendercv_yaml(_PROFILE, _tailored(), _JOB, "engineeringresumes")
+        doc = yaml.safe_load(text)
+        experience = doc["cv"]["sections"]["Experience"]
+        assert [e["company"] for e in experience] == ["Acme: The Company", "Second Co"]
+        assert experience[0]["highlights"] == ["Did X: measured by Y"]  # tailored
+        assert experience[1]["highlights"] == ["Another old highlight"]  # fallback
+
+    def test_old_unrelated_role_dropped_when_include_false(self):
+        profile = {
+            **_PROFILE,
+            "experience": [
+                {**_PROFILE["experience"][0], "end_date": "2015-06", "date": ""},  # old
+                _PROFILE["experience"][1],  # ongoing
+            ],
+        }
+        tailored = _tailored(
+            experience=[TailoredExperienceEntry(index=0, include=False, summary="", highlights=[])]
+        )
+        text = build_rendercv_yaml(profile, tailored, _JOB, "engineeringresumes")
+        doc = yaml.safe_load(text)
+        companies = [e["company"] for e in doc["cv"]["sections"]["Experience"]]
+        assert companies == ["Second Co"]  # old role dropped, ongoing role kept
+
+    def test_ongoing_role_kept_despite_include_false(self):
+        # index 1 (Second Co) is ongoing (end_date "") — always within the recency
+        # floor, so an explicit include=False is overridden and the role is kept.
+        tailored = _tailored(
+            experience=[TailoredExperienceEntry(index=1, include=False, summary="", highlights=[])]
+        )
+        text = build_rendercv_yaml(_PROFILE, tailored, _JOB, "engineeringresumes")
+        doc = yaml.safe_load(text)
+        companies = [e["company"] for e in doc["cv"]["sections"]["Experience"]]
+        assert "Second Co" in companies
+
+    def test_education_always_present_even_when_tailored_empty(self):
+        text = build_rendercv_yaml(_PROFILE, _tailored(education=[]), _JOB, "engineeringresumes")
+        doc = yaml.safe_load(text)
+        education = doc["cv"]["sections"]["Education"]
+        assert education[0]["institution"] == "State University"
+        assert education[0]["highlights"] == ["GPA: 3.9/4.0"]  # profile fallback
 
     def test_summary_becomes_text_entry_section(self):
         text = build_rendercv_yaml(_PROFILE, _tailored(), _JOB, "engineeringresumes")

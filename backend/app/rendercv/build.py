@@ -7,12 +7,18 @@ TailoredCV docstring and CLAUDE.md's "RenderCV integration" mapping table.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 import yaml
 
 from app.llm.schemas import TailoredCV
 
 _PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")  # E.164
+_YEAR_RE = re.compile(r"(19|20)\d{2}")  # first 4-digit 19xx/20xx year in a date string
+_ONGOING = {"", "present", "current", "now", "ongoing", "till date", "to date"}
+# A role ending within this many years is "recent" and is never dropped, even if
+# the LLM marked include=False — a server-side floor over the LLM's decision.
+_RECENT_YEARS = 5
 _KNOWN_SOCIAL_NETWORKS = {
     "linkedin": "LinkedIn", "github": "GitHub", "gitlab": "GitLab", "imdb": "IMDB",
     "instagram": "Instagram", "orcid": "ORCID", "mastodon": "Mastodon",
@@ -62,20 +68,42 @@ def _build_contact(contact: dict) -> dict:
     return cv
 
 
+def _role_is_recent(item: dict) -> bool:
+    """True if the role is ongoing or ended within the last ``_RECENT_YEARS``.
+    Ongoing/undatable roles are conservatively treated as recent so a role we
+    cannot confidently date is never dropped. Used as a server-side floor: a
+    recent role is kept even when the LLM marks ``include=False``."""
+    end = str(item.get("end_date") or "").strip().lower()
+    if end in _ONGOING:
+        return True
+    match = _YEAR_RE.search(end) or _YEAR_RE.search(str(item.get("date") or ""))
+    if not match:
+        return True  # cannot date it → keep it (conservative)
+    return int(match.group()) >= datetime.now(timezone.utc).year - _RECENT_YEARS
+
+
 def _build_experience_section(profile_experience: list[dict], tailored: list) -> list[dict]:
+    """Include-all: render every profile experience in profile order, keyed to
+    the LLM's per-index decision. A role is dropped only when the LLM explicitly
+    set ``include=False`` AND it is not recent (``_role_is_recent``). Missing/
+    partial decisions fall back to the profile's own summary/highlights, so no
+    job is ever silently lost."""
+    decisions = {t.index: t for t in tailored if 0 <= t.index < len(profile_experience)}
     entries = []
-    for t in tailored:
-        if not (0 <= t.index < len(profile_experience)):
-            continue
-        item = profile_experience[t.index]
+    for i, item in enumerate(profile_experience):
+        t = decisions.get(i)
+        if t is not None and not t.include and not _role_is_recent(item):
+            continue  # explicit, eligible drop of an old unrelated role
         entry = {"company": item.get("company", ""), "position": item.get("position", "")}
         entry.update(_dates(item))
         if item.get("location"):
             entry["location"] = item["location"]
-        if t.summary:
-            entry["summary"] = t.summary
-        if t.highlights:
-            entry["highlights"] = t.highlights
+        summary = (t.summary if t and t.summary else item.get("summary")) or ""
+        if summary:
+            entry["summary"] = summary
+        highlights = (t.highlights if t and t.highlights else item.get("highlights")) or []
+        if highlights:
+            entry["highlights"] = highlights
         entries.append(entry)
     return entries
 
@@ -102,11 +130,13 @@ def _build_projects_section(profile_projects: list[dict], tailored: list) -> lis
 
 
 def _build_education_section(profile_education: list[dict], tailored: list) -> list[dict]:
+    """Always-include: render every profile education entry (a degree is never
+    dropped). The LLM contributes reworded highlights by index; entries without
+    a rewrite fall back to the profile's own highlights."""
+    rewrites = {t.index: t for t in tailored if 0 <= t.index < len(profile_education)}
     entries = []
-    for t in tailored:
-        if not (0 <= t.index < len(profile_education)):
-            continue
-        item = profile_education[t.index]
+    for i, item in enumerate(profile_education):
+        t = rewrites.get(i)
         entry = {"institution": item.get("institution", ""), "area": item.get("area", "")}
         if item.get("degree"):
             entry["degree"] = item["degree"]
@@ -115,8 +145,9 @@ def _build_education_section(profile_education: list[dict], tailored: list) -> l
             entry["location"] = item["location"]
         if item.get("summary"):
             entry["summary"] = item["summary"]
-        if t.highlights:
-            entry["highlights"] = t.highlights
+        highlights = (t.highlights if t and t.highlights else item.get("highlights")) or []
+        if highlights:
+            entry["highlights"] = highlights
         entries.append(entry)
     return entries
 

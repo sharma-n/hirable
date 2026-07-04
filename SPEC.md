@@ -416,10 +416,19 @@ nested list-of-object fields — more than the 4 that already forced `ProfileMod
 should never touch is unnecessary hallucination risk on exactly the data that must be exact. Instead:
 1. `llm.invoke(..., response_model=TailoredCV)` — **one** call (confirmed empirically against the
    real Anthropic API, no Part-split needed) — takes the master profile (list items numbered) + job +
-   `good_resume.md` rules, and returns an **index-based selection**: which experience/project/
-   education/publication/extras items to include (by 0-based index into the profile's own lists,
-   never re-emitted), in what order, plus reworded `summary`/`highlights` (quantified, JD-mirrored,
-   §7/§8-compliant) and regrouped `skills`. Facts are never in this model's output.
+   `good_resume.md` rules, and returns an **index-based selection/rewrite** (by 0-based index into the
+   profile's own lists, facts never re-emitted), in CV order, plus reworded `summary`/`highlights`
+   (quantified, JD-mirrored, §7/§8-compliant) and regrouped `skills`. **Inclusion policy differs per
+   section, to stop the model silently dropping jobs/degrees:**
+   - **experience — include-all.** The model returns one entry *per* profile experience, each with an
+     explicit `include` flag; a role is dropped only when the model sets `include: false` **and** it
+     is old enough (a server-side recency floor in `build.py` refuses to drop anything ended within 5
+     years / ongoing / undatable). Older *included* roles are made terser, not omitted.
+   - **education — always included.** Every degree renders; the model contributes reworded highlights
+     only, never a drop decision.
+   - **projects / publications / extras — selectable.** Presence-based: only the returned indices
+     render (these are legitimately skippable).
+   Facts are never in this model's output.
 2. `backend/app/rendercv/build.py` deterministically assembles the RenderCV YAML in Python: contact
    block copied **verbatim** from the profile (phone/website format-validated, invalid values
    omitted rather than passed through — RenderCV's own schema is the final gate for anything that

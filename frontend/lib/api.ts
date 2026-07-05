@@ -414,6 +414,95 @@ export async function apiCompileDocument(sourceText: string): Promise<Blob> {
   return res.blob();
 }
 
+// ---- Applications API --------------------------------------------------------
+
+export const APPLICATION_STAGES = [
+  "Draft",
+  "Applied",
+  "Recruiter Screen",
+  "Technical",
+  "Onsite",
+  "Offer",
+  "Accepted",
+  "Declined",
+  "Rejected",
+  "Stale",
+] as const;
+
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
+export interface ApplicationListItem {
+  id: string;
+  job_id: string;
+  stage: ApplicationStage;
+  company: string;
+  title: string;
+  submitted_at: string | null;
+  last_activity_at: string;
+  auto_stale_at: string | null;
+  next_action: string | null;
+}
+
+export interface ApplicationStageEvent {
+  id: string;
+  from_stage: string | null;
+  to_stage: string;
+  at: string;
+  note: string | null;
+}
+
+export interface ApplicationDocumentRef {
+  id: string;
+  document_id: string;
+  doc_type: string;
+  created_at: string;
+}
+
+export interface ApplicationDetail extends ApplicationListItem {
+  notes: string | null;
+  events: ApplicationStageEvent[];
+  documents: ApplicationDocumentRef[];
+}
+
+export interface ApplicationSubmitResult {
+  application: ApplicationDetail;
+  missing_documents: string[];
+}
+
+export async function apiListApplications(jobId?: string): Promise<ApplicationListItem[]> {
+  return apiFetch<ApplicationListItem[]>(
+    jobId ? `/api/applications?job_id=${jobId}` : "/api/applications",
+  );
+}
+
+/** Applications are 1:1 with jobs — returns the job's application, or null if
+ * it hasn't been created yet (shouldn't normally happen; every job gets one
+ * automatically on ingest). */
+export async function apiGetApplicationForJob(jobId: string): Promise<ApplicationListItem | null> {
+  const list = await apiListApplications(jobId);
+  return list[0] ?? null;
+}
+
+export async function apiGetApplication(applicationId: string): Promise<ApplicationDetail> {
+  return apiFetch<ApplicationDetail>(`/api/applications/${applicationId}`);
+}
+
+export async function apiPatchApplication(
+  applicationId: string,
+  body: { stage?: ApplicationStage; next_action?: string; notes?: string },
+): Promise<ApplicationDetail> {
+  return apiFetch<ApplicationDetail>(`/api/applications/${applicationId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function apiSubmitApplication(applicationId: string): Promise<ApplicationSubmitResult> {
+  return apiFetch<ApplicationSubmitResult>(`/api/applications/${applicationId}/submit`, {
+    method: "POST",
+  });
+}
+
 // ---- Chat / agent API -------------------------------------------------------
 
 export interface SelectableModel {

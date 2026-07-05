@@ -46,3 +46,23 @@ class DraftCoverLetterRequest(BaseModel):
 class DraftCoverLetterResponse(BaseModel):
     document_id: str
     version: int
+
+
+class ApplicationStatusRequest(BaseModel):
+    user_id: str
+    job_id: str
+
+
+class ApplicationStatusResponse(BaseModel):
+    summary: str
+
+
+class ApplicationSetStageRequest(BaseModel):
+    user_id: str
+    job_id: str
+    stage: str
+
+
+class ApplicationSetStageResponse(BaseModel):
+    stage: str
+    summary: str

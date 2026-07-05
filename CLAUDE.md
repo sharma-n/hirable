@@ -34,14 +34,16 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M6 are complete** (three-service
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M7 are complete** (three-service
 skeleton + one-command setup; full auth + session management + admin console + UI redesign;
 resume upload → master profile; job ingest by URL/paste → shortlist; contextual agent panels
 with profile-enrichment write tools — see SPEC.md §6.0 for the chat-tab → embedded-panel pivot;
 tailored CV generation + YAML editor + on-demand PDF preview + profile version history/undo —
 see SPEC.md §8.3/§6.6 and this file's M5 gotchas for the Typst-not-TinyTeX correction; tailored
 cover-letter generation reusing the CV's RenderCV/Typst pipeline — see SPEC.md §8.4 and this
-file's M6 gotchas for the "reuse RenderCV YAML, don't build a second toolchain" decision).
+file's M6 gotchas for the "reuse RenderCV YAML, don't build a second toolchain" decision;
+application tracking + staleness/auto-reject automation + finalized-doc snapshotting — see
+SPEC.md §9 and this file's M7 gotchas for the auto-create-per-job and snapshot-by-id decisions).
 
 ---
 
@@ -198,26 +200,30 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/auth/` | `password.py` (argon2), `sessions.py` (token lifecycle), `dependencies.py` (FastAPI guards) |
 | `backend/app/db/` | SQLAlchemy engine, Base, User + Session models, `create_all()` migration runner |
 | `backend/app/schemas.py` | Pydantic request/response schemas (`SignupRequest`, `UserOut`, …) |
-| `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD, job ingest/CRUD/isolation/needs_paste, internal API secret+context+isolation |
+| `backend/tests/` | pytest suite: auth lifecycle, isolation, admin cascade, 403 guards, WS auth, profile CRUD, job ingest/CRUD/isolation/needs_paste, internal API secret+context+isolation, M7 `test_applications.py` (auto-create/backfill, stage transitions, submit snapshotting, automation time-travel, isolation/cascade) |
 | `backend/app/llm/` | `client.py` (build LLMClient from config), `deps.py` (FastAPI `get_llm` dep), `schemas.py` (ProfileModel, JobModel) |
 | `backend/app/parsing/` | `extract.py` (docling + LaTeX strip), `profile.py` (resume LLM structured extraction), `jobs.py` (trafilatura fetch + job LLM structured extraction); `deps.py` deleted (docling converter no longer injected via FastAPI) |
 | `backend/app/files.py` | Per-user upload storage: `/app/data/uploads/{user_id}/{uuid}.{ext}` |
 | `backend/app/api/profile.py` | `POST /resume`, `GET /`, `PUT /` — all scoped to `current_user` |
 | `backend/app/api/jobs.py` | `POST /` (url/paste ingest + `needs_paste` signal), `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` — all scoped to `current_user` |
-| `backend/app/internal/` | Secret-gated `/internal/*` routes: `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode, plus M5's "a CV already exists at v{n}" hint and M6's matching cover-letter hint in job mode), `profile.py` (`update-section`, `add-item` — now snapshot via `db/profile_history.py` before writing), `documents.py` (M5: `draft-cv`; M6: `draft-cover-letter` — both back their agent tools), `deps.py` (`verify_internal_secret`) |
+| `backend/app/internal/` | Secret-gated `/internal/*` routes: `context.py` (`system_prompt_fn` backend — builds the per-turn profile/job block from `conversation_id`'s mode, plus M5's "a CV already exists at v{n}" hint and M6's matching cover-letter hint in job mode), `profile.py` (`update-section`, `add-item` — now snapshot via `db/profile_history.py` before writing), `documents.py` (M5: `draft-cv`; M6: `draft-cover-letter` — both back their agent tools), `applications.py` (M7: `status`, `set-stage` — back `list_application_status`/`change_application_status`), `deps.py` (`verify_internal_secret`) |
 | `backend/app/db/profile_history.py` | M5: `snapshot_profile` (unconditional, user saves) / `snapshot_for_agent_write` (debounced, agent writes) + prune-to-`max_versions` |
 | `backend/app/rendercv/` | M5: `tailor.py` (`TailoredCV` LLM call), `build.py` (deterministic YAML assembly from profile+tailored+job), `compile.py` (in-process Typst compile, `CompileError` w/ yaml/schema/render stage), `service.py` (`draft_cv_document`/`draft_cover_letter_document` — shared by internal routes + public API); M6: `letter.py` (`TailoredCoverLetter` LLM call + `build_cover_letter_yaml`, reusing `build._build_contact`), `rules.py` (shared `good_resume_rules()` loader, extracted from `tailor.py` so `letter.py` doesn't duplicate it) |
 | `backend/app/api/documents.py` | M5: `POST /draft`, `GET ""` (list, job-scoped, `type` query param), `GET/PUT/DELETE /{id}`, `POST /compile` (stateless, source-text-in/PDF-bytes-out); M6: `POST /draft-cover-letter` — all scoped to `current_user` |
+| `backend/app/applications/` | M7: `stages.py` (`STAGES`/`ACTIVE_STAGES`/`STALE_OR_ACTIVE` constants + `validate_stage`), `service.py` (`get_or_create_application`, `backfill_applications`, `transition_stage` — records an `ApplicationEvent` + snapshots docs on first entry into `Applied` via `finalize_documents`), `automation.py` (`apply_automation(db, now)` — pure function of time, Stale→Rejected), `scheduler.py` (`build_scheduler()`/`run_automation_once()` — APScheduler `BackgroundScheduler`, daily) |
+| `backend/app/api/applications.py` | M7: `GET ""` (optional `job_id` filter), `GET/PATCH /{id}`, `POST /{id}/submit` — all scoped to `current_user` |
 | `frontend/app/(app)/profile/` | Split-screen: `AgentPanel` (conversationBase=`"profile"`) + resume dropzone / section-by-section profile editor; live-refreshes + highlights sections the agent just wrote; M5: `VersionHistorySection` (list + restore, `AlertDialog` confirm) |
-| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5/M6: two `DocumentArtifact`s (CV, then cover letter, stacked in the Application tab) |
+| `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5/M6: two `DocumentArtifact`s (CV, then cover letter, stacked in the Application tab); M7: `ApplicationStatusCard` above them |
+| `frontend/app/(app)/applications/` | M7: kanban board (`@dnd-kit` drag-and-drop between stage columns) + sortable/filterable table view (`Tabs` toggle) — no `[id]` detail page since applications are 1:1 with jobs; cards/rows link to `/jobs/{job_id}` |
 | `frontend/components/agent-panel.tsx` | Reusable chat panel (M4): WS connect, ordered text/tool_call/tool_result message parts (markdown-rendered via `react-markdown`), model picker, "new chat" generation-suffix button, one-click `starterPrompt` chip, localStorage transcript persistence keyed by `conversationId` |
 | `frontend/components/document-artifact.tsx` | M5 (as `cv-artifact.tsx`), generalized in M6 into `DocumentArtifact` parameterized by `documentType: "cv" \| "cover_letter"` + display strings: CodeMirror YAML editor + `<iframe>` PDF preview (blob URL, no PDF-viewer dep) + version picker; exposes an imperative `refetch()` handle (`forwardRef`/`useImperativeHandle`) so the job-detail page can refresh either instance from `AgentPanel`'s `onToolResult` on `draft_cv`/`draft_cover_letter` |
+| `frontend/components/application-status-card.tsx` | M7: stage `<select>`, Submit-application `AlertDialog` (snapshots docs), next_action/notes editing, finalized-document PDF preview (reuses `apiCompileDocument`'s blob-URL flow), events timeline — same imperative `refetch()`-handle pattern as `DocumentArtifact`, refreshed on `AgentPanel`'s `onToolResult` for `change_application_status` |
 | `frontend/components/ui/textarea.tsx` | Native textarea with base-nova Tailwind styling |
 | `agent/bootstrap.py` | Builds `AgentService` with `extra_tools`/`system_prompt_fn`, embeds `good_resume.md`, secret middleware, /health |
-| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient` + `post_json`/`error_detail` helpers, relocated here in M5 so `documents.py` doesn't cross-import `profile.py`'s privates), `profile.py` (the 3 write tools), `documents.py` (M5: `draft_cv` tool; M6: `draft_cover_letter` tool), `context.py` (`build_system_prompt_fn`) |
-| `frontend/app/(app)/` | Authenticated route group: profile, jobs, admin (layout enforces session cookie) — no chat route (see CLAUDE.md's M4 notes) |
+| `agent/tools/` | `client.py` (shared internal-API `httpx.AsyncClient` + `post_json`/`error_detail` helpers, relocated here in M5 so `documents.py` doesn't cross-import `profile.py`'s privates), `profile.py` (the 3 write tools), `documents.py` (M5: `draft_cv` tool; M6: `draft_cover_letter` tool), `applications.py` (M7: `list_application_status`, `change_application_status` — both job-scoped), `context.py` (`build_system_prompt_fn`) |
+| `frontend/app/(app)/` | Authenticated route group: profile, jobs, applications, admin (layout enforces session cookie) — no chat route (see CLAUDE.md's M4 notes) |
 | `frontend/app/(auth)/` | Auth route group: login, signup (layout redirects if already authed) |
-| `frontend/components/app-shell.tsx` | Sticky nav (Profile/Jobs/Admin) + theme toggle + user dropdown |
+| `frontend/components/app-shell.tsx` | Sticky nav (Profile/Jobs/Applications/Admin) + theme toggle + user dropdown |
 | `frontend/components/ui/` | shadcn base-nova components (button, input, card, table, etc.) |
 | `frontend/lib/api.ts` | `apiFetch` helper + typed auth/admin/chat API functions |
 | `frontend/lib/auth.tsx` | `AuthProvider` + `useAuth()` context |
@@ -267,7 +273,7 @@ preferentially.
 | M4 — contextual agent panels + profile-enrichment tools | **Done** | Design pivot: no standalone chat tab — `AgentPanel` embedded split-screen in profile + job-detail pages; 3 write-only tools (`update_profile_section`, `add_profile_item`, `record_clarification`) — no read tools, profile/job context injected per-turn via `system_prompt_fn` instead |
 | M5 — CV generation + editor + PDF + profile version history | **Done** | Deterministic-skeleton + LLM-tailoring (`TailoredCV`, one call — no Part-split needed); RenderCV renders via **Typst, not TinyTeX** (corrects the original plan — see M5 gotchas); DB-only document storage (no PDFs ever on disk); `draft_cv` is the only new agent tool (`compile_document`/`save_document` dropped — one-click UI actions instead); profile version history/undo added to scope mid-planning |
 | M6 — cover letter | **Done** | Resolved the §8.4 "TBD" typesetting decision: the cover letter **reuses the CV's RenderCV/Typst pipeline** (contact header + one `TextEntry` section of prose paragraphs) rather than a second toolchain — see M6 gotchas. `TailoredCoverLetter` (flat schema, one `llm.invoke()` call, confirmed against the real Anthropic API). `draft_cover_letter` is the only new agent tool; UI reuses the generalized `DocumentArtifact` component stacked below the CV in the job-detail page's Application tab |
-| M7 — application tracking + automation | Pending | |
+| M7 — application tracking + automation | **Done** | One `Application` auto-created per job (1:1, idempotent backfill for pre-M7 jobs); `transition_stage` snapshots the latest CV+cover-letter `Document` (by id, no content/PDF copy — consistent with M5's DB-only decision) on first entry into `Applied`; `apply_automation(db, now)` is a pure function of time (Stale→Rejected) run by an APScheduler `BackgroundScheduler` (daily + once at startup, skipped under pytest — see M7 gotchas); two new job-scoped agent tools, `list_application_status` (the one read-tool exception to write-only) and `change_application_status`; frontend `/applications` kanban (`@dnd-kit`) + table, plus an `ApplicationStatusCard` on the job-detail page |
 | M8 — analytics dashboard | Pending | |
 | M9 — polish, hardening, docs | Pending | |
 
@@ -740,3 +746,79 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   the day number was needed without a leading zero, `f"{now:%B} {now.day}, {now:%Y}"` sidesteps the
   portability question entirely rather than relying on a flag that happens to work in the
   `python:3.13-slim` Docker image.
+
+## Gotchas encountered during M7
+
+- **`apscheduler` was already a declared backend dependency before M7 started** (pre-staged at
+  skeleton time, `backend/pyproject.toml`), and `config.yaml`'s `app.tracking` block
+  (`stale_after_days`/`auto_reject_after_days`) already existed too — but neither had any code
+  reading/using them until M7. Same for `documents.is_finalized` and append-only versioning: both
+  were built in M5 with a docstring explicitly anticipating "a finalized application (M7) can
+  snapshot the exact document submitted." **When picking up a milestone, grep for fields/deps that
+  look unused — they're often intentionally pre-staged, not dead code.**
+- **The scheduler + startup backfill must be skipped under pytest.** `main.py`'s lifespan calls
+  `backfill_applications(SessionLocal())` and starts the `BackgroundScheduler` directly — both bypass
+  FastAPI's `get_db` dependency entirely (they construct their own session), so the test suite's
+  `app.dependency_overrides[get_db]` override (which points at the in-memory test DB) has no effect
+  on them. Without a guard, every test run using the `client` fixture would hit the **real on-disk**
+  `app/data/hirable.db` — creating real `Application` rows for whatever `Job` rows exist there from
+  manual dev testing, and spinning up/tearing down a background thread on every single test. Fixed
+  with a `_under_pytest()` check (`"PYTEST_CURRENT_TEST" in os.environ`, a standard pytest-set env
+  var) that skips both under test. **Any future lifespan code that talks to the DB via its own
+  `SessionLocal()` (not `Depends(get_db)`) needs the same guard** — it's invisible to the existing
+  `app.dependency_overrides` pattern.
+- **`db.commit()`'s default `expire_on_commit=True` already reproduces the SQLite tz-naive-on-read
+  gotcha within a single test — no cross-session trick needed.** Initially assumed a test would need
+  to force a fresh query (e.g. `db.expire_all()`) to see a naive datetime, since the same Python
+  object/session is reused across a whole test via the `db_session` fixture. Empirically confirmed
+  otherwise: SQLAlchemy's default sessionmaker expires all attributes on every `commit()`, so the
+  very next attribute access triggers a real SELECT and comes back tz-naive — meaning
+  `apply_automation`'s `.replace(tzinfo=timezone.utc)` fix (same pattern as
+  `auth/sessions.py`/`db/profile_history.py`) is exercised by the time-travel tests exactly as
+  written, with a plain `application.last_activity_at = <backdated aware datetime>; db.commit()`.
+- **Automation must not reset `last_activity_at` on its own writes, or the reject threshold would
+  never fire.** `transition_stage(..., actor=...)` only updates `last_activity_at`/`auto_stale_at`
+  when `actor != "automation"` — a Stale→Rejected transition triggered by the scheduler must not
+  "touch" the application in a way that pushes the reject clock forward, since that clock is measured
+  from the *original* inactivity, not from the automation's own intervention. Covered by
+  `test_automation_does_not_reset_last_activity` in `test_applications.py`.
+- **`apply_automation` checks the auto-reject threshold *before* the stale threshold**, so an
+  application idle long enough to blow past both thresholds in one scheduler gap (e.g. the server was
+  down for 40 days) goes straight to `Rejected` in a single pass, rather than landing on `Stale` and
+  waiting for the *next* run to notice it's also past the reject threshold.
+- **Applications are auto-created 1:1 with jobs — there is no manual "create application" step and
+  no `/applications/{id}` detail page.** `job_id` carries a `unique=True` constraint enforcing the
+  1:1. `api/jobs.py`'s `add_job` calls `get_or_create_application` right after committing the new
+  job row; `backfill_applications` (idempotent — an outer-join-for-missing query, not a blind insert)
+  covers jobs that existed before M7 shipped. Because of the 1:1, the frontend's `/applications`
+  board/table and the job-detail page's `ApplicationStatusCard` are two views onto the *same*
+  underlying row — there's no separate detail route, kanban cards and table rows link straight to
+  `/jobs/{job_id}`.
+- **The application-document snapshot stores only the `Document` row id, never a content or PDF
+  copy** — consistent with M5's DB-only, no-PDF-persistence privacy decision. `finalize_documents`
+  looks up the latest CV/cover-letter `Document` for the job (same `order_by(version.desc()).first()`
+  pattern as `rendercv/service.py`'s `_next_version`), flips `is_finalized=True` on that exact row,
+  and records an `ApplicationDocument(document_id=...)` — nothing new is written to the file store or
+  compiled to PDF at submit time; the PDF is still produced on demand from that row's `source_text`,
+  same as any other version. This is also what makes submit idempotent for free: calling it again
+  while `submitted_at` is already set skips `finalize_documents` entirely (checked in
+  `transition_stage`), so a second submit can't create a duplicate `ApplicationDocument` row.
+- **`GET /api/applications` gained an optional `job_id` query param** (mirroring
+  `GET /api/documents?job_id=...&type=...`) specifically because the job-detail page only has a
+  `job_id` in hand, never an `application_id` — `frontend/lib/api.ts`'s `apiGetApplicationForJob`
+  wraps this into "fetch the (at most one) application for this job." No new backend route was
+  needed; the existing list endpoint's `user_id` scoping already covers it.
+- **The kanban board only needed `@dnd-kit/core` + `@dnd-kit/utilities`, not `@dnd-kit/sortable`.**
+  `@dnd-kit/sortable` is for reordering items *within* a list; this board only moves cards *between*
+  stage columns (order within a column is irrelevant — applications aren't sorted against each other
+  within the same stage), so plain `useDraggable`/`useDroppable`/`DndContext` is sufficient. Installed
+  `@dnd-kit/sortable` initially per the original plan, then removed it after confirming it added
+  nothing (`npm uninstall @dnd-kit/sortable`) — **don't install a satellite package on a library's
+  name-brand recognition alone; check whether the specific interaction (cross-column vs. in-column
+  reordering) actually needs it.** `PointerSensor` needs an `activationConstraint: { distance: 8 }`
+  so a plain click on a card (e.g. its `<Link>` to the job) doesn't get swallowed as a zero-distance
+  drag.
+- **Stage is stored as a plain `String` column with an inline comment listing valid values**
+  (`Application.stage`), not a SQLAlchemy `Enum` — matches the existing convention for
+  `Document.type`/`ProfileVersion.source`. Validation happens at the API/internal boundary
+  (`app/applications/stages.py`'s `STAGES` tuple + `validate_stage`), not the DB layer.

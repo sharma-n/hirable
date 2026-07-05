@@ -66,3 +66,11 @@ def profile_history_max_versions() -> int:
 
 def profile_history_agent_debounce_minutes() -> float:
     return app_config().get("profile_history", {}).get("agent_debounce_minutes", 15)
+
+
+def tracking_stale_after_days() -> int:
+    return app_config().get("tracking", {}).get("stale_after_days", 15)
+
+
+def tracking_auto_reject_after_days() -> int:
+    return app_config().get("tracking", {}).get("auto_reject_after_days", 30)

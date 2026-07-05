@@ -7,6 +7,7 @@ import { ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AgentPanel } from "@/components/agent-panel";
+import { ApplicationStatusCard, type ApplicationStatusHandle } from "@/components/application-status-card";
 import { DocumentArtifact, type DocumentArtifactHandle } from "@/components/document-artifact";
 import {
   AlertDialog,
@@ -210,10 +211,13 @@ export default function JobDetailPage() {
   const [showRawText, setShowRawText] = useState(false);
   const [cvHighlighted, setCvHighlighted] = useState(false);
   const [letterHighlighted, setLetterHighlighted] = useState(false);
+  const [applicationHighlighted, setApplicationHighlighted] = useState(false);
   const cvRef = useRef<DocumentArtifactHandle | null>(null);
   const letterRef = useRef<DocumentArtifactHandle | null>(null);
+  const applicationRef = useRef<ApplicationStatusHandle | null>(null);
   const cvHighlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const letterHighlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applicationHighlightTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm<JobFormValues>({ defaultValues: EMPTY_FORM });
 
@@ -234,12 +238,19 @@ export default function JobDetailPage() {
       if (letterHighlightTimeout.current) clearTimeout(letterHighlightTimeout.current);
       letterHighlightTimeout.current = setTimeout(() => setLetterHighlighted(false), 4000);
     }
+    if (name === "change_application_status") {
+      applicationRef.current?.refetch();
+      setApplicationHighlighted(true);
+      if (applicationHighlightTimeout.current) clearTimeout(applicationHighlightTimeout.current);
+      applicationHighlightTimeout.current = setTimeout(() => setApplicationHighlighted(false), 4000);
+    }
   }
 
   useEffect(() => {
     return () => {
       if (cvHighlightTimeout.current) clearTimeout(cvHighlightTimeout.current);
       if (letterHighlightTimeout.current) clearTimeout(letterHighlightTimeout.current);
+      if (applicationHighlightTimeout.current) clearTimeout(applicationHighlightTimeout.current);
     };
   }, []);
 
@@ -367,6 +378,11 @@ export default function JobDetailPage() {
 
         {/* Application Tab */}
         <TabsContent value="application" className="flex-1 space-y-6">
+          <ApplicationStatusCard
+            ref={applicationRef}
+            jobId={job.id}
+            highlighted={applicationHighlighted}
+          />
           <DocumentArtifact
             ref={cvRef}
             jobId={job.id}

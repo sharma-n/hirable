@@ -130,3 +130,58 @@ class JobCreateRequest(BaseModel):
         if not self.url and not self.raw_text:
             raise ValueError("Provide at least one of 'url' or 'raw_text'")
         return self
+
+
+# ---- Applications (M7) -------------------------------------------------------
+
+
+class ApplicationStageEventOut(BaseModel):
+    id: str
+    from_stage: str | None
+    to_stage: str
+    at: datetime
+    note: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class ApplicationDocumentOut(BaseModel):
+    id: str
+    document_id: str
+    doc_type: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ApplicationListItemOut(BaseModel):
+    id: str
+    job_id: str
+    stage: str
+    company: str
+    title: str
+    submitted_at: datetime | None
+    last_activity_at: datetime
+    auto_stale_at: datetime | None
+    next_action: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class ApplicationDetailOut(ApplicationListItemOut):
+    notes: str | None
+    events: list[ApplicationStageEventOut]
+    documents: list[ApplicationDocumentOut]
+
+    model_config = {"from_attributes": True}
+
+
+class ApplicationPatchRequest(BaseModel):
+    stage: str | None = None
+    next_action: str | None = None
+    notes: str | None = None
+
+
+class ApplicationSubmitResult(BaseModel):
+    application: ApplicationDetailOut
+    missing_documents: list[str] = []

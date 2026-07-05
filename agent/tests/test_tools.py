@@ -12,6 +12,7 @@ import json
 import httpx
 import pytest
 
+from tools.applications import change_application_status_tool, list_application_status_tool
 from tools.context import build_system_prompt_fn
 from tools.documents import draft_cover_letter_tool, draft_cv_tool
 from tools.profile import (
@@ -285,6 +286,101 @@ class TestDraftCoverLetterTool:
         client = _client_with_handler(handler)
         tool = draft_cover_letter_tool(client)
         result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert "temporarily unreachable" in result
+
+
+@pytest.mark.asyncio
+class TestListApplicationStatusTool:
+    async def test_success_returns_summary(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["url"] = str(request.url)
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"summary": "Application for Engineer at Acme is at stage: Draft."})
+
+        client = _client_with_handler(handler)
+        tool = list_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+
+        assert seen["url"] == "http://backend:8000/internal/applications/status"
+        assert seen["body"] == {"user_id": "user-1", "job_id": "job-1"}
+        assert result == "Application for Engineer at Acme is at stage: Draft."
+
+    async def test_missing_job_id_returns_error_without_http_call(self):
+        client = _client_with_handler(lambda r: httpx.Response(500))
+        tool = list_application_status_tool(client)
+        result = await tool.handler("user-1", {})
+        assert result == "error: 'job_id' is required"
+
+    async def test_job_not_found_returns_friendly_message(self):
+        client = _client_with_handler(lambda r: httpx.Response(404, json={"detail": "Job not found"}))
+        tool = list_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "no-such-job"})
+        assert result == "That job could not be found."
+
+    async def test_unreachable_backend_returns_readable_message(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Name or service not known", request=request)
+
+        client = _client_with_handler(handler)
+        tool = list_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert "temporarily unreachable" in result
+
+
+@pytest.mark.asyncio
+class TestChangeApplicationStatusTool:
+    async def test_success_returns_confirmation(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["url"] = str(request.url)
+            seen["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"stage": "Applied", "summary": "Application for Engineer at Acme is at stage: Applied."})
+
+        client = _client_with_handler(handler)
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1", "stage": "Applied"})
+
+        assert seen["url"] == "http://backend:8000/internal/applications/set-stage"
+        assert seen["body"] == {"user_id": "user-1", "job_id": "job-1", "stage": "Applied"}
+        assert "Application stage updated" in result
+        assert "Applied" in result
+
+    async def test_missing_job_id_returns_error_without_http_call(self):
+        client = _client_with_handler(lambda r: httpx.Response(500))
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"stage": "Applied"})
+        assert result == "error: 'job_id' is required"
+
+    async def test_missing_stage_returns_error_without_http_call(self):
+        client = _client_with_handler(lambda r: httpx.Response(500))
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1"})
+        assert result == "error: 'stage' is required"
+
+    async def test_job_not_found_returns_friendly_message(self):
+        client = _client_with_handler(lambda r: httpx.Response(404, json={"detail": "Job not found"}))
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "no-such-job", "stage": "Applied"})
+        assert result == "That job could not be found."
+
+    async def test_invalid_stage_returns_error_string(self):
+        client = _client_with_handler(
+            lambda r: httpx.Response(422, json={"detail": "Invalid stage — valid stages are: Draft, Applied"})
+        )
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1", "stage": "Nonsense"})
+        assert result == "error: Invalid stage — valid stages are: Draft, Applied"
+
+    async def test_unreachable_backend_returns_readable_message(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Name or service not known", request=request)
+
+        client = _client_with_handler(handler)
+        tool = change_application_status_tool(client)
+        result = await tool.handler("user-1", {"job_id": "job-1", "stage": "Applied"})
         assert "temporarily unreachable" in result
 
 

@@ -45,7 +45,13 @@ _JOB_MODE_INSTRUCTIONS = (
     "letter via the draft_cover_letter tool (same job_id argument) — per good_resume.md "
     "§12, a cover letter mostly helps at small/mid-size companies and startups where a "
     "person screens applications (big tech rarely reads them), so mention that "
-    "trade-off if relevant, but still draft one whenever the user asks."
+    "trade-off if relevant, but still draft one whenever the user asks. Use "
+    "list_application_status (same job_id) if the user asks about this job's tracking "
+    "status. Use change_application_status only when the user explicitly says they "
+    "applied, heard back, or want to correct the tracked stage — moving to 'Applied' "
+    "automatically finalizes the latest CV/cover-letter drafts as the submitted "
+    "documents, so confirm with the user before doing that if it isn't already obvious "
+    "from what they said."
 )
 
 _JOB_NOT_FOUND_BLOCK = (

@@ -49,6 +49,8 @@ tools:
     - record_clarification
     - draft_cv
     - draft_cover_letter
+    - list_application_status
+    - change_application_status
 
 mcp:
   servers: []

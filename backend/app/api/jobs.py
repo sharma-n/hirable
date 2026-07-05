@@ -8,6 +8,7 @@ from llm_kit import LLMClient
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.applications.service import get_or_create_application
 from app.auth.dependencies import current_user, get_db
 from app.db.models import Job, User
 from app.llm.deps import get_llm
@@ -53,6 +54,7 @@ async def add_job(
     db.add(job_row)
     db.commit()
     db.refresh(job_row)
+    get_or_create_application(db, job_row)
     logger.info(
         "job created: user=%s job=%s company=%r title=%r",
         user.id, job_row.id, parsed.company, parsed.title,

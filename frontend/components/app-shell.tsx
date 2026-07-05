@@ -10,6 +10,7 @@ import {
   FileText,
   Bookmark,
   BarChart2,
+  KanbanSquare,
   ShieldCheck,
   LogOut,
   User,
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/profile", label: "Profile", icon: User },
   { href: "/jobs", label: "Jobs", icon: Bookmark },
+  { href: "/applications", label: "Applications", icon: KanbanSquare },
   { href: "/documents", label: "Documents", icon: FileText, disabled: true },
   { href: "/analytics", label: "Analytics", icon: BarChart2, disabled: true },
 ];

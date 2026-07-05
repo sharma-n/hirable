@@ -292,7 +292,8 @@ readable message.
 | `record_clarification(key, value)` | Persist a clarifying-question answer into the profile's `enrichment` list (implemented as `add_profile_item` with `section="enrichment"`) |
 | `draft_cv(job_id, instructions?)` | **(M5, done)** Tailor + assemble a RenderCV YAML CV for a job and persist it as a new document version (§8.3) |
 | `draft_cover_letter(job_id, instructions?)` | **(M6, done)** Tailor + assemble a cover letter (reusing the CV's RenderCV/Typst pipeline) for a job and persist it as a new document version (§8.4) |
-| `list_application_status` | *(M7, optional)* Let the agent answer tracking questions |
+| `list_application_status(job_id)` | **(M7, done)** Read the tracked application status for a specific job — stage, submission date, next action, finalized documents |
+| `change_application_status(job_id, stage)` | **(M7, done)** Transition a job's application to a new stage; entering "Applied" for the first time auto-finalizes the latest CV + cover letter as the submitted documents |
 
 `get_profile` / `list_jobs` / `get_job` from the original catalogue were **dropped** — see §6.1;
 the same data reaches the agent via `system_prompt_fn` instead. **`compile_document`/`save_document`
@@ -304,7 +305,12 @@ write-only-tools philosophy (§6.1). `draft_cv` takes `job_id` as an explicit ar
 from `conversation_id`) because agent_kit's `Tool` handler signature is `(user_id, arguments)` only —
 it has no access to the conversation id the way `system_prompt_fn` does — but this costs nothing
 since the job's id is already shown to the model in the job-mode context block (`system_prompt_fn`),
-so the model just echoes it back as a tool argument.
+so the model just echoes it back as a tool argument. **`list_application_status` (M7) is the one
+deliberate exception to the write-only-tools philosophy** — unlike profile/job data, application
+tracking state is not injected into the system prompt every turn (§6.1's per-turn injection only
+covers profile/job), so a genuine read tool is the only channel for the agent to learn a job's
+current stage. Both M7 tools are job-scoped (`job_id` argument, same reasoning as `draft_cv` above)
+since applications are 1:1 with jobs (§7).
 
 ### 6.3 Memory configuration — and why episodic is OFF
 - **Working memory + session store: ON** — needed for multi-turn coherence within a conversation.
@@ -370,8 +376,8 @@ the change, so "restore version N" reads as "go back to how things were right be
 | `jobs` | id, user_id, source_url, raw_text, parsed (JSON), shortlist_status, created_at |
 | `documents` | id, user_id, job_id → jobs, type (`cv`/`cover_letter`), source_format, source_text, version, is_finalized, created_at |
 | `profile_versions` | id, user_id, version, data (JSON pre-change snapshot), source (`user`/`agent`/`restore`), created_at |
-| `applications` | id, user_id, job_id → jobs, stage, submitted_at, last_activity_at, next_action, auto_stale_at, notes |
-| `application_documents` | application_id → applications, document_id → documents (snapshot of finalized CV + cover letter used) |
+| `applications` | id, user_id, job_id → jobs (**unique** — 1:1), stage, submitted_at, last_activity_at, next_action, auto_stale_at, notes, created_at, updated_at |
+| `application_documents` | id, application_id → applications, document_id → documents, doc_type (`cv`/`cover_letter`), created_at (snapshot of the finalized CV + cover letter used — by id only, no content copy) |
 | `application_events` | id, application_id, from_stage, to_stage, at, note |
 
 **Master profile JSON shape** (`profiles.data`): `contact`, `summary`, `skills[]`,
@@ -488,9 +494,13 @@ answers persist via `record_clarification`, enriching the master profile for all
 
 - **Stages:** `Draft → Applied → Recruiter Screen → Technical → Onsite → Offer → Accepted / Declined`,
   plus terminal `Rejected` and automatic `Stale`.
-- **On submission:** snapshot the **finalized CV + cover letter** (source + compiled PDF) into
-  `application_documents` so the exact materials used are preserved for future reference, even if the
-  user later regenerates documents.
+- **On submission:** snapshot the **finalized CV + cover letter** into `application_documents` so the
+  exact materials used are preserved for future reference, even if the user later regenerates
+  documents. **Implemented (M7) as a reference to the exact `documents` row id, not a content or PDF
+  copy** — consistent with M5's DB-only, no-PDF-persistence decision (§2, §8.3): `documents` rows are
+  already immutable/append-only, so the latest CV/cover-letter version at submit time simply has
+  `is_finalized` flipped and its id recorded; the PDF is still compiled on demand from that row's
+  `source_text`, same as any other version.
 - **Scheduler (APScheduler in the backend):**
   - Mark `Stale` after `tracking.stale_after_days` of no `last_activity_at` change in an active stage.
   - Optionally mark `Rejected` (ghosted) after `tracking.auto_reject_after_days`.
@@ -542,6 +552,13 @@ callbacks and context feed backing §6.1/§6.2:
   `update_profile_section`.
 - `POST /internal/profile/add-item` `{user_id, section, item}` — backs `add_profile_item` and
   `record_clarification`.
+- `POST /internal/documents/draft-cv` / `draft-cover-letter` `{user_id, job_id, instructions?}` —
+  back `draft_cv` / `draft_cover_letter`.
+- `POST /internal/applications/status` `{user_id, job_id}` → `{summary: str}` — backs
+  `list_application_status`.
+- `POST /internal/applications/set-stage` `{user_id, job_id, stage}` — backs
+  `change_application_status`; routes through the same `transition_stage` the public API uses, so
+  entering `Applied` here also snapshots the latest CV + cover letter (§9).
 
 ---
 
@@ -649,12 +666,44 @@ callbacks and context feed backing §6.1/§6.2:
   for cover-letter documents (internal + public API); CV and cover-letter versions for the same job
   number independently. 150 backend tests + 29 agent tests green; `npm run build` clean.
 
-**M7 — Application tracking + automation + finalized-doc history**
-- `applications` + stage-transition UI (kanban + table); on submit, **snapshot** finalized CV + cover
-  letter into `application_documents`; APScheduler stale/rejected automation; `next_action` reminders;
-  per-application view lists exact submitted PDFs.
-- **Acceptance:** create → advance → submit an application; finalized docs are snapshotted and viewable
-  later; a time-travel unit test marks an idle application `Stale`.
+**M7 — Application tracking + automation + finalized-doc history** ✅
+- One `Application` row **auto-created per job** on ingest (1:1, `job_id unique`), plus an idempotent
+  startup backfill (`backend/app/applications/service.py`) for jobs created before M7 shipped. New
+  `application_events` (one row per transition, manual or automated) and `application_documents`
+  (snapshot association — stores only the `document_id` of the exact finalized version, since
+  `documents` rows are already immutable/append-only) tables.
+- `backend/app/applications/{service,automation,scheduler,stages}.py`: `transition_stage` (records
+  an event; entering `Applied` for the first time snapshots the latest CV + cover-letter `Document`
+  versions via `finalize_documents`, flipping `is_finalized`); `apply_automation(db, now)` — a pure
+  function of time so it's time-travel-testable — marks idle **Applied/Recruiter Screen/Technical/
+  Onsite/Offer** apps `Stale` past `stale_after_days`, then `Rejected` past `auto_reject_after_days`
+  (checking the reject threshold first so a long-idle app can skip straight past `Stale` in one pass).
+  An APScheduler `BackgroundScheduler` runs this daily (+ once at startup), wired into `main.py`'s
+  lifespan; skipped under pytest since it bypasses `get_db`'s test override and would otherwise touch
+  the real dev DB file directly via its own `SessionLocal()`.
+- New `backend/app/api/applications.py` (`GET ""` w/ optional `job_id` filter, `GET/PATCH "/{id}"`,
+  `POST "/{id}/submit"`) and secret-gated `backend/app/internal/applications.py`
+  (`/internal/applications/{status,set-stage}`) backing two new **job-scoped** agent tools —
+  `list_application_status(job_id)` (the one deliberate read-tool exception to §6.1's write-only
+  philosophy, since application state isn't injected per-turn) and `change_application_status(job_id,
+  stage)` (write; routes through the same `transition_stage`, so an agent-driven "Applied" also
+  snapshots documents).
+- Frontend: `/applications` (nav entry) with a **`@dnd-kit`** drag-and-drop kanban board (columns per
+  stage) + sortable/filterable table toggle (`Tabs`); no separate `/applications/[id]` page since
+  applications are 1:1 with jobs — cards/rows link straight to `/jobs/{job_id}`. The job-detail page's
+  Application tab gained `components/application-status-card.tsx` (stage select, Submit-application
+  `AlertDialog`, next_action/notes editing, finalized-document PDF preview via the existing
+  `apiCompileDocument` blob-URL flow, events timeline) above the CV/cover-letter `DocumentArtifact`s.
+- **Acceptance:** ✅ a new job gets a Draft application automatically; submitting finalizes the latest
+  CV + cover letter (`is_finalized`, `application_documents`) and is idempotent (no duplicate snapshot
+  on a second submit); dragging a kanban card or using the job-detail stage select persists the
+  transition and appends an event; a time-travel unit test (backdating `last_activity_at`, then
+  calling `apply_automation` directly) proves `Stale` then `Rejected`, including the SQLite
+  tz-naive-on-read comparison; the agent answers "what's the status of this application?" via
+  `list_application_status` and can move stages via `change_application_status`; cross-user isolation
+  and cascade-on-delete (user, job) verified for all three new tables; the internal endpoints reject
+  calls without `X-Internal-Secret`. 180 backend tests (150 + 30 new) + 39 agent tests (29 + 10 new)
+  green; `npm run build` clean; `npm audit` / `uv audit` clean (both services).
 
 **M8 — Analytics dashboard**
 - Compute & render funnel, response rate, time-to-response, over-time, status counts, per-CV-version

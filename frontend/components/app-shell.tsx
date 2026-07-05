@@ -82,28 +82,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Nav links */}
           <nav className="flex items-center gap-1 ml-2">
-            {NAV_ITEMS.map(({ href, label, icon: Icon, disabled }) => (
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
-                href={disabled ? "#" : href}
-                aria-disabled={disabled}
-                tabIndex={disabled ? -1 : undefined}
+                href={href}
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  disabled
-                    ? "text-muted-foreground/50 cursor-not-allowed pointer-events-none"
-                    : pathname === href
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  pathname === href
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 <Icon className="size-3.5" />
                 {label}
-                {disabled && (
-                  <span className="ml-1 hidden sm:inline text-[10px] text-muted-foreground/60">
-                    soon
-                  </span>
-                )}
               </Link>
             ))}
             {user?.role === "admin" && (

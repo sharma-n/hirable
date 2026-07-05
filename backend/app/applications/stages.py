@@ -27,6 +27,31 @@ ACTIVE_STAGES: frozenset[str] = frozenset(
 # auto-rejects too).
 STALE_OR_ACTIVE: frozenset[str] = ACTIVE_STAGES | {"Stale"}
 
+# M8 analytics: stages that unconditionally represent a genuine employer
+# response. "Rejected" is deliberately excluded here — it only counts as a
+# response when the transition's actor isn't "automation" (an
+# automation-caused Rejected means the application was ghosted, not that the
+# employer replied) — see analytics/service.py's _is_response_event.
+RESPONSE_STAGES: frozenset[str] = frozenset(
+    {"Recruiter Screen", "Technical", "Onsite", "Offer", "Accepted", "Declined"}
+)
+
+# The ordered pipeline stages tracked by the funnel chart. Declined/Rejected
+# are terminal negative outcomes, not further funnel progress, so they're
+# excluded here (unlike RESPONSE_STAGES, which is about detecting *any*
+# reply).
+FUNNEL_STAGES: tuple[str, ...] = (
+    "Applied",
+    "Recruiter Screen",
+    "Technical",
+    "Onsite",
+    "Offer",
+    "Accepted",
+)
+
+# Stages that imply an offer was made (Accepted/Declined both presuppose one).
+OFFER_STAGES: frozenset[str] = frozenset({"Offer", "Accepted", "Declined"})
+
 
 def validate_stage(stage: str) -> None:
     if stage not in STAGES:

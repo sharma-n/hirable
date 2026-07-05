@@ -141,6 +141,7 @@ class ApplicationStageEventOut(BaseModel):
     to_stage: str
     at: datetime
     note: str | None
+    actor: str
 
     model_config = {"from_attributes": True}
 
@@ -185,3 +186,51 @@ class ApplicationPatchRequest(BaseModel):
 class ApplicationSubmitResult(BaseModel):
     application: ApplicationDetailOut
     missing_documents: list[str] = []
+
+
+# ---- Analytics (M8) -----------------------------------------------------
+
+
+class FunnelStageOut(BaseModel):
+    stage: str
+    count: int
+    pct_of_applied: float
+
+
+class StatusCountsOut(BaseModel):
+    by_stage: dict[str, int]
+    active: int
+    stale: int
+    rejected: int
+    offers: int
+
+
+class ApplicationsOverTimePointOut(BaseModel):
+    month: str  # "YYYY-MM"
+    count: int
+
+
+class CvVersionPerformanceOut(BaseModel):
+    version: int
+    submitted_count: int
+    response_count: int
+    response_rate: float
+
+
+class BreakdownGroupOut(BaseModel):
+    key: str
+    count: int
+    response_count: int
+    response_rate: float
+
+
+class AnalyticsOut(BaseModel):
+    funnel: list[FunnelStageOut]
+    response_rate: float
+    median_time_to_first_response_days: float | None
+    applications_over_time: list[ApplicationsOverTimePointOut]
+    status_counts: StatusCountsOut
+    offer_rate: float
+    cv_version_performance: list[CvVersionPerformanceOut]
+    by_company_type: list[BreakdownGroupOut]
+    by_location: list[BreakdownGroupOut]

@@ -705,10 +705,29 @@ callbacks and context feed backing §6.1/§6.2:
   calls without `X-Internal-Secret`. 180 backend tests (150 + 30 new) + 39 agent tests (29 + 10 new)
   green; `npm run build` clean; `npm audit` / `uv audit` clean (both services).
 
-**M8 — Analytics dashboard**
-- Compute & render funnel, response rate, time-to-response, over-time, status counts, per-CV-version
-  performance, and company-type/location breakdowns.
-- **Acceptance:** dashboard reflects seeded data; metric math verified by unit tests.
+**M8 — Analytics dashboard** ✅
+- `backend/app/analytics/service.py`'s `compute_analytics(db, user_id)` computes every §10 metric
+  (funnel, response rate, median time-to-first-response, applications-over-time, status counts,
+  offer rate, per-CV-version response rate, company-type/location breakdowns) from `applications` +
+  `application_events`, exposed via `GET /api/analytics` (`backend/app/api/analytics.py`).
+- **Schema addition made during M8 planning:** `ApplicationEvent` gained an `actor` column
+  ("user"/"agent"/"automation") — it distinguishes a genuine employer response from the scheduler's
+  own ghosting-driven Stale/Rejected transitions (§9), which `transition_stage` already received as
+  a parameter but never persisted. Since this repo has no Alembic (only `create_all()`),
+  `backend/app/db/migrate.py` gained a small guarded `ALTER TABLE ... ADD COLUMN actor` step so
+  pre-existing dev DBs get patched in place rather than needing a reset.
+- Per-CV-version performance groups *submitted* applications by their finalized CV's `Document.version`
+  (how many drafts happened before submission), not by literal per-document identity (each job only
+  ever has one finalized CV, so a raw per-document breakdown would be meaningless with n=1 per group).
+- Frontend: `frontend/app/(app)/analytics/page.tsx` — stat tiles, a funnel bar chart, an
+  applications-over-time line chart, and company-type/location/CV-version tables, using **recharts**
+  (new dependency — no charting library existed before M8).
+- **Acceptance:** ✅ dashboard reflects seeded data (funnel counts, response rate, and the
+  ghosting-exclusion case all spot-checked by hand); zero-application empty state renders cleanly;
+  metric math verified by unit tests (`backend/tests/test_analytics.py`) including DB-free tests of
+  the `_pct`/`_median_days`/`_is_response_event` helpers; cross-user isolation verified; unauthenticated
+  `GET /api/analytics` rejected. 194 backend tests (180 + 14 new) green; `npm run build` clean;
+  `npm audit` / `uv audit` clean (both services).
 
 **M9 — Polish, hardening, docs**
 - Error/empty/loading states; pytest suites (parsing fixtures, internal-API auth, tool isolation,

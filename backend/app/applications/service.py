@@ -90,7 +90,10 @@ def transition_stage(
     ``actor`` distinguishes real activity ("user"/"agent") from the
     background automation ("automation") — only real activity resets
     ``last_activity_at``/``auto_stale_at``, so the automation's own writes
-    don't reset the staleness clock they exist to advance.
+    don't reset the staleness clock they exist to advance. ``actor`` is also
+    persisted onto the ``ApplicationEvent`` row (M8) so analytics can tell a
+    genuine response apart from an automation-caused Stale/Rejected
+    (ghosting).
 
     Entering "Applied" for the first time (``submitted_at is None``) snapshots
     the latest CV + cover-letter Document versions via ``finalize_documents``.
@@ -108,6 +111,7 @@ def transition_stage(
                 from_stage=from_stage,
                 to_stage=to_stage,
                 note=note,
+                actor=actor,
             )
         )
         application.stage = to_stage

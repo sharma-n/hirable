@@ -34,7 +34,7 @@ vulnerabilities, and we do not defer security concerns to "later". Concretely:
 ## What this is
 A self-hosted, multi-user job-application assistant (resume parsing → master profile → tailored
 CV/cover letter generation via an agentic chat → application tracking + analytics). Full spec in
-`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M7 are complete** (three-service
+`SPEC.md`. Implementation is milestone-based (M0–M9); **M0–M8 are complete** (three-service
 skeleton + one-command setup; full auth + session management + admin console + UI redesign;
 resume upload → master profile; job ingest by URL/paste → shortlist; contextual agent panels
 with profile-enrichment write tools — see SPEC.md §6.0 for the chat-tab → embedded-panel pivot;
@@ -43,7 +43,10 @@ see SPEC.md §8.3/§6.6 and this file's M5 gotchas for the Typst-not-TinyTeX cor
 cover-letter generation reusing the CV's RenderCV/Typst pipeline — see SPEC.md §8.4 and this
 file's M6 gotchas for the "reuse RenderCV YAML, don't build a second toolchain" decision;
 application tracking + staleness/auto-reject automation + finalized-doc snapshotting — see
-SPEC.md §9 and this file's M7 gotchas for the auto-create-per-job and snapshot-by-id decisions).
+SPEC.md §9 and this file's M7 gotchas for the auto-create-per-job and snapshot-by-id decisions;
+analytics dashboard (funnel, response rate, time-to-response, per-CV-version performance,
+company-type/location breakdowns) — see SPEC.md §10 and this file's M8 gotchas for the
+`ApplicationEvent.actor` schema addition and its no-Alembic migration).
 
 ---
 
@@ -212,9 +215,12 @@ The backend injects the trusted `user_id` into every WS message forwarded to the
 | `backend/app/api/documents.py` | M5: `POST /draft`, `GET ""` (list, job-scoped, `type` query param), `GET/PUT/DELETE /{id}`, `POST /compile` (stateless, source-text-in/PDF-bytes-out); M6: `POST /draft-cover-letter` — all scoped to `current_user` |
 | `backend/app/applications/` | M7: `stages.py` (`STAGES`/`ACTIVE_STAGES`/`STALE_OR_ACTIVE` constants + `validate_stage`), `service.py` (`get_or_create_application`, `backfill_applications`, `transition_stage` — records an `ApplicationEvent` + snapshots docs on first entry into `Applied` via `finalize_documents`), `automation.py` (`apply_automation(db, now)` — pure function of time, Stale→Rejected), `scheduler.py` (`build_scheduler()`/`run_automation_once()` — APScheduler `BackgroundScheduler`, daily) |
 | `backend/app/api/applications.py` | M7: `GET ""` (optional `job_id` filter), `GET/PATCH /{id}`, `POST /{id}/submit` — all scoped to `current_user` |
+| `backend/app/analytics/service.py` | M8: `compute_analytics(db, user_id)` — funnel, response rate (excludes automation-caused Stale/Rejected via `_is_response_event`), median time-to-first-response, applications-over-time, status counts, offer rate, per-CV-version response rate, company-type/location breakdowns; small DB-free helpers `_pct`/`_median_days`/`_is_response_event` |
+| `backend/app/api/analytics.py` | M8: `GET ""` — scoped to `current_user`, delegates straight to `compute_analytics` |
 | `frontend/app/(app)/profile/` | Split-screen: `AgentPanel` (conversationBase=`"profile"`) + resume dropzone / section-by-section profile editor; live-refreshes + highlights sections the agent just wrote; M5: `VersionHistorySection` (list + restore, `AlertDialog` confirm) |
 | `frontend/app/(app)/jobs/` | Job shortlist list page (add by URL/paste, table) + `[id]/` split-screen detail/edit page (`AgentPanel` with conversationBase=`` `job:${id}` ``) + M5/M6: two `DocumentArtifact`s (CV, then cover letter, stacked in the Application tab); M7: `ApplicationStatusCard` above them |
 | `frontend/app/(app)/applications/` | M7: kanban board (`@dnd-kit` drag-and-drop between stage columns) + sortable/filterable table view (`Tabs` toggle) — no `[id]` detail page since applications are 1:1 with jobs; cards/rows link to `/jobs/{job_id}` |
+| `frontend/app/(app)/analytics/` | M8: stat tiles (response/offer rate, median time-to-response, active/stale/rejected), a funnel bar chart + applications-over-time line chart (**recharts**, first charting lib in the app), and company-type/location/CV-version breakdown tables; zero-application empty state |
 | `frontend/components/agent-panel.tsx` | Reusable chat panel (M4): WS connect, ordered text/tool_call/tool_result message parts (markdown-rendered via `react-markdown`), model picker, "new chat" generation-suffix button, one-click `starterPrompt` chip, localStorage transcript persistence keyed by `conversationId` |
 | `frontend/components/document-artifact.tsx` | M5 (as `cv-artifact.tsx`), generalized in M6 into `DocumentArtifact` parameterized by `documentType: "cv" \| "cover_letter"` + display strings: CodeMirror YAML editor + `<iframe>` PDF preview (blob URL, no PDF-viewer dep) + version picker; exposes an imperative `refetch()` handle (`forwardRef`/`useImperativeHandle`) so the job-detail page can refresh either instance from `AgentPanel`'s `onToolResult` on `draft_cv`/`draft_cover_letter` |
 | `frontend/components/application-status-card.tsx` | M7: stage `<select>`, Submit-application `AlertDialog` (snapshots docs), next_action/notes editing, finalized-document PDF preview (reuses `apiCompileDocument`'s blob-URL flow), events timeline — same imperative `refetch()`-handle pattern as `DocumentArtifact`, refreshed on `AgentPanel`'s `onToolResult` for `change_application_status` |
@@ -274,7 +280,7 @@ preferentially.
 | M5 — CV generation + editor + PDF + profile version history | **Done** | Deterministic-skeleton + LLM-tailoring (`TailoredCV`, one call — no Part-split needed); RenderCV renders via **Typst, not TinyTeX** (corrects the original plan — see M5 gotchas); DB-only document storage (no PDFs ever on disk); `draft_cv` is the only new agent tool (`compile_document`/`save_document` dropped — one-click UI actions instead); profile version history/undo added to scope mid-planning |
 | M6 — cover letter | **Done** | Resolved the §8.4 "TBD" typesetting decision: the cover letter **reuses the CV's RenderCV/Typst pipeline** (contact header + one `TextEntry` section of prose paragraphs) rather than a second toolchain — see M6 gotchas. `TailoredCoverLetter` (flat schema, one `llm.invoke()` call, confirmed against the real Anthropic API). `draft_cover_letter` is the only new agent tool; UI reuses the generalized `DocumentArtifact` component stacked below the CV in the job-detail page's Application tab |
 | M7 — application tracking + automation | **Done** | One `Application` auto-created per job (1:1, idempotent backfill for pre-M7 jobs); `transition_stage` snapshots the latest CV+cover-letter `Document` (by id, no content/PDF copy — consistent with M5's DB-only decision) on first entry into `Applied`; `apply_automation(db, now)` is a pure function of time (Stale→Rejected) run by an APScheduler `BackgroundScheduler` (daily + once at startup, skipped under pytest — see M7 gotchas); two new job-scoped agent tools, `list_application_status` (the one read-tool exception to write-only) and `change_application_status`; frontend `/applications` kanban (`@dnd-kit`) + table, plus an `ApplicationStatusCard` on the job-detail page |
-| M8 — analytics dashboard | Pending | |
+| M8 — analytics dashboard | **Done** | `compute_analytics(db, user_id)` (`backend/app/analytics/service.py`) computes funnel/response-rate/time-to-response/over-time/status-counts/offer-rate/per-CV-version/breakdowns from `applications`+`application_events`, served by `GET /api/analytics`; added `ApplicationEvent.actor` (first schema change to a pre-existing table since M0 — see M8 gotchas for the guarded `ALTER TABLE` this required, since there's no Alembic) so response-rate can exclude automation-caused ghosting; frontend `/analytics` page (stat tiles, funnel + over-time recharts, breakdown/CV-version tables) — **recharts** is a new dependency, the first charting library in the app |
 | M9 — polish, hardening, docs | Pending | |
 
 ---
@@ -822,3 +828,69 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   (`Application.stage`), not a SQLAlchemy `Enum` — matches the existing convention for
   `Document.type`/`ProfileVersion.source`. Validation happens at the API/internal boundary
   (`app/applications/stages.py`'s `STAGES` tuple + `validate_stage`), not the DB layer.
+
+## Gotchas encountered during M8
+
+- **This is the first schema change since M0 that adds a column to a pre-existing table, rather
+  than a whole new table** — every prior milestone's schema growth (`profile_versions` in M5,
+  `applications`/`application_events`/`application_documents` in M7) was additive at the table
+  level, which `backend/app/db/migrate.py`'s `Base.metadata.create_all(bind=engine)` handles for
+  free on any DB (it only creates tables that don't exist yet; it never alters existing ones). This
+  repo has no Alembic, so adding `ApplicationEvent.actor` needed its own guarded step:
+  `_add_application_event_actor_column()` checks `PRAGMA table_info(application_events)` for the
+  column and runs `ALTER TABLE application_events ADD COLUMN actor VARCHAR DEFAULT 'user'` only if
+  missing. Fresh DBs (and every test, since `conftest.py`'s `db_engine` fixture calls
+  `create_all()` directly and never goes through `run_migrations()`) already have the column and
+  the check no-ops. **If a future milestone needs to add a column to an existing table, follow this
+  same guarded-`ALTER TABLE`-in-`migrate.py` pattern** rather than reaching for a full migration
+  framework — it's proportionate for a single-file SQLite, no-Alembic setup.
+- **`transition_stage`'s `actor` parameter existed since M7 but was silently dropped on the floor.**
+  `backend/app/applications/service.py`'s `transition_stage(db, application, to_stage, *,
+  actor="user", note=None)` already used `actor` to decide whether to reset
+  `last_activity_at`/`auto_stale_at` (M7's ghosting-clock logic), but never wrote it onto the
+  `ApplicationEvent` row it creates — so the one signal that could tell a real reply apart from the
+  scheduler's own Stale/Rejected transitions was being computed and then thrown away every time.
+  Fixed with a one-line addition to the `ApplicationEvent(...)` constructor call; no call site
+  needed to change since `actor` was already being passed in everywhere. **Lesson: a parameter
+  already threaded through a function for one purpose is worth checking for other implicit uses
+  before assuming a new feature needs new plumbing.**
+- **Response rate must exclude automation-caused Rejected, or ghosting inflates the metric.**
+  `analytics/service.py`'s `_is_response_event(to_stage, actor)` treats
+  `RESPONSE_STAGES = {"Recruiter Screen","Technical","Onsite","Offer","Accepted","Declined"}` as an
+  unconditional response, but `"Rejected"` only counts when `actor != "automation"` — a real
+  rejection email (user or agent marks the application Rejected) is a genuine reply; the scheduler
+  auto-rejecting a ghosted application (`apply_automation`, SPEC §9) is the opposite of a response.
+  Offer rate does **not** need the same gating — automation only ever writes `Stale`/`Rejected`
+  transitions, never `Offer`/`Accepted`/`Declined`, so there's no ghosting-equivalent failure mode
+  for reaching an offer stage.
+- **Per-CV-version performance groups by "how many CV revisions happened before submission," not
+  by literal per-document identity.** Each job only ever has one finalized CV
+  (`ApplicationDocument` snapshots exactly one `cv` row per job at submit time — see M7 gotchas), so
+  grouping by raw `document_id` would yield n=1 per group across the board, telling you nothing. The
+  version *number* itself (1, 2, 3, …) is comparable across jobs — it answers "does submitting after
+  more revisions correlate with a better response rate?" — which is what `_compute_cv_version_performance`
+  actually groups by, joining `ApplicationDocument` → `Document.version` for `doc_type == "cv"`.
+- **`compute_analytics` fetches every `Application` row for the user once and derives every metric
+  from that same Python list** (via relationship-lazy-loaded `.events`/`.documents`/`.job` access),
+  rather than one SQL aggregate query per metric — matching the N+1-ish tradeoff
+  `api/applications.py`'s `_to_detail` already accepts at this app's realistic per-user data
+  volumes (dozens to low hundreds of applications, not millions). `selectinload(Application.events)`
+  is the lever if this ever needs to scale; not needed for M8.
+- **`job.parsed.get(key) or "Unknown"` is the single normalization point for missing/blank
+  breakdown keys** — it handles both a `company_type`/`location` key that's entirely absent from an
+  old or manually-seeded `Job.parsed` dict, and a present-but-empty-string value (which `JobModel`'s
+  LLM extraction can legitimately produce). Don't duplicate this fallback anywhere else (e.g. the
+  frontend) — the backend response never contains a missing/blank breakdown key.
+- **recharts is the first charting library added to the frontend** — SPEC.md only ever said "charts
+  for analytics" without naming one; `npm install recharts` (`frontend/package.json`) pulls it in
+  cleanly (`npm audit`: 0 vulnerabilities). Chart colors follow the project's dataviz skill: an
+  ordinal blue ramp (light→dark, one step per `FUNNEL_STAGES` entry) for the funnel bars since
+  they're a single ordered measure, not distinct categorical series; a flat single hue for the
+  over-time line. Company-type/location/CV-version breakdowns render as tables rather than bar
+  charts — with only a handful of groups per user, exact numbers read more clearly than a chart, and
+  it sidesteps long-location-name label overflow entirely.
+- **Chart colors are resolved via `useTheme().resolvedTheme` (next-themes), matching
+  `document-artifact.tsx`'s existing CodeMirror-theme pattern** (`resolvedTheme === "dark" ? ... :
+  ...`) — recharts needs real hex passed to its `fill`/`stroke` props, not a Tailwind class, so
+  `frontend/app/(app)/analytics/page.tsx` keeps small light/dark hex constants rather than trying to
+  route CSS custom properties through recharts' SVG props.

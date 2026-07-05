@@ -193,6 +193,7 @@ class TestPublicApi:
         assert len(body["events"]) == 1
         assert body["events"][0]["from_stage"] == "Draft"
         assert body["events"][0]["to_stage"] == "Recruiter Screen"
+        assert body["events"][0]["actor"] == "user"
 
     def test_patch_invalid_stage_422(self, client, db_session):
         user = _signup(client, "a@example.com")
@@ -353,6 +354,8 @@ class TestAutomation:
         assert application.stage == "Stale"
         events = db_session.query(ApplicationEvent).filter_by(application_id=application.id).all()
         assert any(e.to_stage == "Stale" for e in events)
+        # M8's response-rate ghosting-exclusion depends on this being persisted.
+        assert next(e for e in events if e.to_stage == "Stale").actor == "automation"
 
     def test_idle_past_reject_threshold_marked_rejected(self, db_session):
         user = _seed_user(db_session, "reject@example.com")

@@ -230,7 +230,9 @@ class Application(Base):
 
 class ApplicationEvent(Base):
     """One row per stage transition (manual or automated) — the funnel source
-    for M8's analytics."""
+    for M8's analytics. ``actor`` ("user" | "agent" | "automation") is what
+    lets analytics distinguish a genuine response from the scheduler's own
+    ghosting-driven Stale/Rejected transitions."""
 
     __tablename__ = "application_events"
 
@@ -242,6 +244,7 @@ class ApplicationEvent(Base):
     to_stage: Mapped[str] = mapped_column(String, nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
     note: Mapped[str | None] = mapped_column(String, nullable=True)
+    actor: Mapped[str] = mapped_column(String, nullable=False, default="user")  # "user" | "agent" | "automation"
 
     application: Mapped[Application] = relationship("Application", back_populates="events")
 

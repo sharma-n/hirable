@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   { href: "/jobs", label: "Jobs", icon: Bookmark },
   { href: "/applications", label: "Applications", icon: KanbanSquare },
   { href: "/documents", label: "Documents", icon: FileText, disabled: true },
-  { href: "/analytics", label: "Analytics", icon: BarChart2, disabled: true },
+  { href: "/analytics", label: "Analytics", icon: BarChart2 },
 ];
 
 function ThemeToggle() {

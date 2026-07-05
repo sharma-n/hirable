@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin import router as admin_router
+from app.api.analytics import router as analytics_router
 from app.api.applications import router as applications_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -80,6 +81,7 @@ app.include_router(profile_router)
 app.include_router(jobs_router)
 app.include_router(documents_router)
 app.include_router(applications_router)
+app.include_router(analytics_router)
 app.include_router(internal_router)
 
 

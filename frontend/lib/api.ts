@@ -449,6 +449,7 @@ export interface ApplicationStageEvent {
   to_stage: string;
   at: string;
   note: string | null;
+  actor: string;
 }
 
 export interface ApplicationDocumentRef {
@@ -501,6 +502,57 @@ export async function apiSubmitApplication(applicationId: string): Promise<Appli
   return apiFetch<ApplicationSubmitResult>(`/api/applications/${applicationId}/submit`, {
     method: "POST",
   });
+}
+
+// ---- Analytics API ------------------------------------------------------
+
+export interface FunnelStage {
+  stage: string;
+  count: number;
+  pct_of_applied: number;
+}
+
+export interface StatusCounts {
+  by_stage: Record<string, number>;
+  active: number;
+  stale: number;
+  rejected: number;
+  offers: number;
+}
+
+export interface ApplicationsOverTimePoint {
+  month: string;
+  count: number;
+}
+
+export interface CvVersionPerformance {
+  version: number;
+  submitted_count: number;
+  response_count: number;
+  response_rate: number;
+}
+
+export interface BreakdownGroup {
+  key: string;
+  count: number;
+  response_count: number;
+  response_rate: number;
+}
+
+export interface Analytics {
+  funnel: FunnelStage[];
+  response_rate: number;
+  median_time_to_first_response_days: number | null;
+  applications_over_time: ApplicationsOverTimePoint[];
+  status_counts: StatusCounts;
+  offer_rate: number;
+  cv_version_performance: CvVersionPerformance[];
+  by_company_type: BreakdownGroup[];
+  by_location: BreakdownGroup[];
+}
+
+export async function apiGetAnalytics(): Promise<Analytics> {
+  return apiFetch<Analytics>("/api/analytics");
 }
 
 // ---- Chat / agent API -------------------------------------------------------

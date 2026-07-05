@@ -7,7 +7,6 @@ import {
   Briefcase,
   Moon,
   Sun,
-  FileText,
   Bookmark,
   BarChart2,
   KanbanSquare,
@@ -36,7 +35,6 @@ const NAV_ITEMS = [
   { href: "/profile", label: "Profile", icon: User },
   { href: "/jobs", label: "Jobs", icon: Bookmark },
   { href: "/applications", label: "Applications", icon: KanbanSquare },
-  { href: "/documents", label: "Documents", icon: FileText, disabled: true },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
 ];
 

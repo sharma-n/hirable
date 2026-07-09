@@ -1,4 +1,4 @@
-"""Per-turn dynamic system-prompt context (agent_kit's `system_prompt_fn` hook).
+"""Per-turn dynamic system-prompt context (harness_kit's `system_prompt_fn` hook).
 
 Fetches the user's current profile (and, in job mode, the job posting) from the
 backend fresh on every turn, so the agent always sees its own prior writes without

@@ -1,4 +1,4 @@
-# ---- LLM (consumed by agent_kit sidecar AND backend parsing/generation) ----
+# ---- LLM (consumed by harness_kit sidecar AND backend parsing/generation) ----
 llm_kit:
   llm:
     base_url: ${LLM_BASE_URL:-https://api.anthropic.com}
@@ -9,7 +9,7 @@ llm_kit:
     max_tokens: 4096
   # embed block omitted — episodic memory is OFF; no embedder needed
 
-# ---- agent_kit ----
+# ---- harness_kit ----
 agent:
   max_iterations: 6
   per_tool_timeout_s: 120.0  # draft_cv wraps 2 LLM calls + YAML assembly — 30s was too tight

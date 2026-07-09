@@ -20,7 +20,7 @@ the rulebook the agent uses to write and critique resumes/cover letters.
 - Professional, publication-quality PDF output (via RenderCV/Typst — not LaTeX, see §2) with a
   user-editable source.
 - Agentic chat for profile enrichment and document generation, built on the
-  [`agent_kit`](https://github.com/sharma-n/agent_kit) sidecar (which builds on
+  [`harness_kit`](https://github.com/sharma-n/harness_kit) sidecar (which builds on
   [`llm_kit`](https://github.com/sharma-n/llm_kit)).
 
 **Non-goals (initially)**
@@ -41,7 +41,7 @@ Three services + SQLite + a render toolchain, orchestrated by `docker compose`.
         ▲                                             │   ▲   │
         │  streamed AgentEvents                       │   │   │ HTTP/WS  (X-Internal-Secret)
         └─────────────────────────────────────────────┘   │   ▼
-                                                           │  [ agent_kit sidecar ]
+                                                           │  [ harness_kit sidecar ]
                           tool callbacks (X-Internal-Secret)   chat brain (uvicorn)
                                   ◀────────────────────────┘   internal network only
         │
@@ -65,11 +65,11 @@ store still holds resume *uploads*, per M2). See `backend/app/rendercv/`.
 - **Backend (FastAPI / Python)** — the **system of record** and the only component with DB access. It
   owns auth, the public API, an **internal** (shared-secret) API used by the sidecar's tools, the chat
   **proxy** to the sidecar, document rendering, the tracking scheduler, and analytics.
-- **agent_kit sidecar (Python / uvicorn)** — the chat brain: streaming agent loop, working memory +
+- **harness_kit sidecar (Python / uvicorn)** — the chat brain: streaming agent loop, working memory +
   session store, per-user `PermissionStore`, and our injected custom tools. **Bound to the internal
   docker network only — never published to the host.**
 
-Bottom-up layering mirrors agent_kit's own philosophy: `config → db → services → api → frontend`, with
+Bottom-up layering mirrors harness_kit's own philosophy: `config → db → services → api → frontend`, with
 the sidecar as a peer reached only through the backend.
 
 ---
@@ -107,7 +107,7 @@ hirable/
 │     │                        #   package was needed (M6 reuses this pipeline, see §8.4)
 │     ├─ tracking/             # APScheduler jobs (stale/rejected), stage transitions
 │     └─ analytics/            # metric computations
-└─ agent/                      # agent_kit bootstrap (Python 3.13, uv-managed)
+└─ agent/                      # harness_kit bootstrap (Python 3.13, uv-managed)
    ├─ bootstrap.py             # builds AgentService, enforces X-Internal-Secret, /health
    └─ tools/                   # custom Tool definitions (call backend internal API)
    # config.yaml resolved at runtime: Docker mount (/app/config.yaml) or repo root
@@ -120,7 +120,7 @@ hirable/
 A **single `config.yaml`** is mounted into both backend and agent so the LLM is configured once.
 
 ```yaml
-# ---- LLM (consumed by agent_kit sidecar AND backend parsing/generation) ----
+# ---- LLM (consumed by harness_kit sidecar AND backend parsing/generation) ----
 llm_kit:
   llm:
     base_url: https://api.anthropic.com   # change for other providers
@@ -130,7 +130,7 @@ llm_kit:
     chat_completions_path: /v1/messages   # required for anthropic; omit for openai
     max_tokens: 4096
 
-# ---- agent_kit (exact schema — do not add unknown top-level keys here) ----
+# ---- harness_kit (exact schema — do not add unknown top-level keys here) ----
 agent:
   max_iterations: 6
   per_tool_timeout_s: 30.0               # field name is per_tool_timeout_s, not per_turn_budget_s
@@ -164,7 +164,7 @@ mcp:
 telemetry:
   enabled: false
 
-# ---- app (consumed by backend only — agent_kit strips this block) ----
+# ---- app (consumed by backend only — harness_kit strips this block) ----
 app:
   agent_base_url: ${AGENT_BASE_URL:-http://agent:8000}  # override locally
   internal_base_url: http://backend:8000
@@ -207,7 +207,7 @@ Three trust boundaries, two credentials:
    network only**, so neither it nor the internal API is reachable from the host.
 
 **Trusted `user_id` flow:** the backend derives `user_id` from the authenticated session and injects
-it when starting/continuing a conversation with the sidecar. agent_kit passes that `user_id` to each
+it when starting/continuing a conversation with the sidecar. harness_kit passes that `user_id` to each
 tool handler. Tool handlers call the backend internal API with `X-Internal-Secret` **and** that
 `user_id`; the internal endpoints scope strictly to it. Consequence: **a plain HTTP request cannot read
 another user's data** — there is no host-reachable, unauthenticated path to user data, and the
@@ -218,7 +218,7 @@ delete / password reset invalidates them).
 
 ---
 
-## 6. Agent integration (agent_kit)
+## 6. Agent integration (harness_kit)
 
 ### 6.0 No standalone chat tab — two contextual agent panels
 
@@ -235,32 +235,32 @@ a conversation is actually useful:
 
 Both panels are the same `AgentPanel` component, parameterized by a **conversation-id base**:
 `profile` or `` job:{job_id} ``. The chat proxy (`backend/app/api/chat.py`) namespaces this by the
-authenticated `user_id` before forwarding upstream (`{user_id}:{base}`), because agent_kit
+authenticated `user_id` before forwarding upstream (`{user_id}:{base}`), because harness_kit
 conversations are globally keyed and user-owned — a bare id like `profile` would otherwise collide
 across users. A client-side "new chat" button appends a generation suffix (`profile.2`) to start a
 fresh thread without losing the stable id's resumability; the internal API strips both the
 namespace prefix and the generation suffix before interpreting the conversation's mode.
 
 ### 6.1 Bootstrap (native tools, no MCP, no read tools)
-`agent/bootstrap.py` builds the agent_kit app by loading the shared `config.yaml`, stripping the
-`app:` block (agent_kit rejects unknown top-level keys), embedding `docs/good_resume.md` into the
+`agent/bootstrap.py` builds the harness_kit app by loading the shared `config.yaml`, stripping the
+`app:` block (harness_kit rejects unknown top-level keys), embedding `docs/good_resume.md` into the
 static `agent.system_prompt`, and calling:
 
 ```python
-from agent_kit.config.loader import load_dict
-from agent_kit.config.schema import AgentKitConfig
-from agent_kit.service import AgentService
-from agent_kit.serving.app import create_app
+from harness_kit.config.loader import load_dict
+from harness_kit.config.schema import HarnessKitConfig
+from harness_kit.service import AgentService
+from harness_kit.serving.app import create_app
 
 service = AgentService.build(
-    load_dict(AgentKitConfig, agent_raw),
+    load_dict(HarnessKitConfig, agent_raw),
     extra_tools=build_tools(internal_client),          # agent/tools/
     system_prompt_fn=build_system_prompt_fn(internal_client),  # agent/tools/context.py
 )
 app = create_app(service)
 ```
 
-Each custom tool is a native agent_kit `Tool`:
+Each custom tool is a native harness_kit `Tool`:
 ```python
 Tool(
     definition=ToolDefinition(name=..., description=..., parameters={...JSON schema...}),
@@ -268,7 +268,7 @@ Tool(
 )
 ```
 
-**Per-turn dynamic context, not read tools.** agent_kit calls `system_prompt_fn(user_id,
+**Per-turn dynamic context, not read tools.** harness_kit calls `system_prompt_fn(user_id,
 conversation_id)` fresh on every turn and appends its return value to the system prompt as a
 tier-0 (never-evicted) block. `build_system_prompt_fn` (in `agent/tools/context.py`) fetches this
 from the backend's `POST /internal/context`, which returns the user's current profile JSON (and,
@@ -302,7 +302,7 @@ the CV panel sits directly next to the editor in the job-detail page, so compili
 one-click UI actions against the public API (`POST /api/documents/compile`, `PUT /api/documents/{id}`)
 — giving the agent its own redundant tools for the same two actions would be pure overhead under the
 write-only-tools philosophy (§6.1). `draft_cv` takes `job_id` as an explicit argument (not derived
-from `conversation_id`) because agent_kit's `Tool` handler signature is `(user_id, arguments)` only —
+from `conversation_id`) because harness_kit's `Tool` handler signature is `(user_id, arguments)` only —
 it has no access to the conversation id the way `system_prompt_fn` does — but this costs nothing
 since the job's id is already shown to the model in the job-mode context block (`system_prompt_fn`),
 so the model just echoes it back as a tool argument. **`list_application_status` (M7) is the one
@@ -320,7 +320,7 @@ since applications are 1:1 with jobs (§7).
   **forcing an embedding model into the install** (hurting the one-command setup goal). It is a
   config flag (`memory.episodic.enabled`) we can flip on later if we want "you mentioned X on
   another job" recall.
-- **agent_kit factual auto-extraction: OFF.** Enrichments are persisted **explicitly** via
+- **harness_kit factual auto-extraction: OFF.** Enrichments are persisted **explicitly** via
   `record_clarification` into the canonical profile, keeping a single source of truth (no duplicate
   fact store to reconcile).
 
@@ -345,7 +345,7 @@ conversation id (`{user_id}:{conversation_id}`), and relays to the sidecar's WS 
 `turn_complete` / `error`) back to the frontend. The frontend never contacts the sidecar directly.
 Conversation end (disconnect/idle) is signalled to the sidecar to finalize working memory; the
 stable (non-suffixed) conversation id is what lets a user navigate away and back and resume the
-same thread, until agent_kit's idle `ttl_s` expires it.
+same thread, until harness_kit's idle `ttl_s` expires it.
 
 ### 6.6 Profile version history & undo *(M5)*
 Every profile write snapshots the **pre-change** state into `profile_versions` (§7) before applying
@@ -575,7 +575,7 @@ callbacks and context feed backing §6.1/§6.2:
 **M0 — Project skeleton & one-command setup** ✅
 - Monorepo; `docker-compose.yml` (frontend, backend, agent on an internal network; only
   frontend+backend published); `.env.example`; single mounted `config.yaml`.
-- `uv` backend (Python 3.13); agent_kit installed from git URL. SQLite engine + `create_all()`
+- `uv` backend (Python 3.13); harness_kit installed from git URL. SQLite engine + `create_all()`
   migration runner. Health endpoints on all three services.
 - Agent bootstrap strips `app:` from config, builds `AgentService`, enforces `X-Internal-Secret`
   middleware; backend chat proxy relays WS messages to the sidecar with injected `user_id`.
@@ -758,10 +758,10 @@ callbacks and context feed backing §6.1/§6.2:
 
 ## 15. Key dependencies
 
-- **Backend:** FastAPI, uvicorn, SQLAlchemy (or SQLModel) + SQLite, argon2-cffi, `agent_kit`
+- **Backend:** FastAPI, uvicorn, SQLAlchemy (or SQLModel) + SQLite, argon2-cffi, `harness_kit`
   (brings `llm_kit`), docling, trafilatura, `rendercv[full]` (brings `typst` + `rendercv-fonts` —
   prebuilt-wheel Typst compiler, **not TinyTeX/LaTeX**, §2), APScheduler, pydantic.
-- **Agent sidecar:** `agent_kit` (configured per §4/§6), our custom tools.
+- **Agent sidecar:** `harness_kit` (configured per §4/§6), our custom tools.
 - **Frontend:** Next.js, React, TypeScript; `@uiw/react-codemirror` (+ `@codemirror/lang-yaml`) for
   the YAML/letter source editor; PDF preview via a plain `<iframe>` blob URL (no dedicated PDF-viewer
   library needed); charts for analytics.

@@ -8,7 +8,7 @@ round-trip read tool would be redundant.
 Handlers special-case *expected* failures (404 "no profile yet", 422 bad shape)
 into a readable observation string. Genuine transport failures (backend
 unreachable, DNS/connection errors, timeouts) are also caught explicitly here and
-turned into a plain-language observation — agent_kit's ToolRegistry *would*
+turned into a plain-language observation — harness_kit's ToolRegistry *would*
 convert an uncaught exception into ToolResult(ok=False) on its own, but the raw
 `str(httpx.ConnectError(...))` text is not a useful message for the model to act
 on (it can't do anything about "Name or service not known"), so we give it
@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from agent_kit.tools.base import Tool
+from harness_kit.tools.base import Tool
 from llm_kit import ToolDefinition
 
 from .client import error_detail as _error_detail

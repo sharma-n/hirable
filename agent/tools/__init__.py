@@ -8,7 +8,7 @@ every turn via `system_prompt_fn` (see bootstrap.py).
 from __future__ import annotations
 
 import httpx
-from agent_kit.tools.base import Tool
+from harness_kit.tools.base import Tool
 
 from .applications import change_application_status_tool, list_application_status_tool
 from .documents import draft_cover_letter_tool, draft_cv_tool

@@ -1,7 +1,7 @@
 """Agent sidecar entry point.
 
-Builds the agent_kit app from the shared config.yaml, stripping the `app:` section
-that belongs to the backend before passing it to agent_kit (which rejects unknown keys).
+Builds the harness_kit app from the shared config.yaml, stripping the `app:` section
+that belongs to the backend before passing it to harness_kit (which rejects unknown keys).
 
 Start with:
     uvicorn bootstrap:create_app --factory --host 0.0.0.0 --port 8000
@@ -30,7 +30,7 @@ def _expand_env(value: str) -> str:
     """Expand ``${VAR:-default}`` in a string value.
 
     The `app:` block is stripped out of the config before it's handed to
-    agent_kit's `load_dict` (which runs its own `_interpolate_env` on the rest of
+    harness_kit's `load_dict` (which runs its own `_interpolate_env` on the rest of
     the config) — so anything read out of `app:` here needs its own expansion,
     mirroring `backend/app/config.py`'s `_expand`.
     """
@@ -85,17 +85,17 @@ class InternalSecretMiddleware(BaseHTTPMiddleware):
 
 def create_app():
     """ASGI factory called by uvicorn --factory."""
-    from agent_kit.config.loader import load_dict
-    from agent_kit.config.schema import AgentKitConfig
-    from agent_kit.service import AgentService
-    from agent_kit.serving.app import create_app as agent_create_app
+    from harness_kit.config.loader import load_dict
+    from harness_kit.config.schema import HarnessKitConfig
+    from harness_kit.service import AgentService
+    from harness_kit.serving.app import create_app as agent_create_app
 
     config_path = _find_config()
     raw = yaml.safe_load(config_path.read_text())
 
     app_block = raw.get("app", {})
 
-    # Strip backend-only keys — agent_kit rejects unknown top-level keys.
+    # Strip backend-only keys — harness_kit rejects unknown top-level keys.
     agent_raw = {k: v for k, v in raw.items() if k != "app"}
 
     # M4: embed the good_resume.md rulebook into the static system prompt.
@@ -112,7 +112,7 @@ def create_app():
     # job posting) is injected fresh on every turn rather than fetched via a
     # read tool, so the agent never needs a round trip to see its own writes.
     service = AgentService.build(
-        load_dict(AgentKitConfig, agent_raw),
+        load_dict(HarnessKitConfig, agent_raw),
         extra_tools=build_tools(internal_client),
         system_prompt_fn=build_system_prompt_fn(internal_client),
     )

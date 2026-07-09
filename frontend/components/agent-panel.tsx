@@ -127,7 +127,7 @@ function readGeneration(base: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// The underlying agent_kit conversation persists server-side (same conversationId
+// The underlying harness_kit conversation persists server-side (same conversationId
 // = same session, resumed on reconnect) regardless of whether this component is
 // mounted — so without this, navigating away and back would silently desync the
 // displayed transcript from what the agent actually remembers. Mirror it

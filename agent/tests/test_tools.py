@@ -1,7 +1,7 @@
 """Unit tests for the hirable agent's tool handlers and system_prompt_fn.
 
 These call the handler functions directly against a mocked HTTP transport (no
-real backend, no agent_kit service/registry involved) — they verify the
+real backend, no harness_kit service/registry involved) — they verify the
 right request is sent and that 200/404/422 responses map to the expected
 observation strings.
 """

@@ -24,7 +24,7 @@ def list_models(user: User = Depends(current_user)) -> dict:
 
 @router.websocket("/api/chat/ws/{conversation_id}")
 async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
-    """Proxy browser WS ↔ agent_kit sidecar WS, injecting trusted user_id + shared secret."""
+    """Proxy browser WS ↔ harness_kit sidecar WS, injecting trusted user_id + shared secret."""
     # Resolve session before accepting the connection
     db = SessionLocal()
     try:
@@ -41,7 +41,7 @@ async def chat_proxy(websocket: WebSocket, conversation_id: str) -> None:
     await websocket.accept()
 
     secret = os.environ.get("AGENT_INTERNAL_SECRET", "")
-    # Namespace by user_id: agent_kit conversations are globally keyed and
+    # Namespace by user_id: harness_kit conversations are globally keyed and
     # user-owned (SessionStore.load raises UnauthorizedError on cross-user access),
     # so a fixed client-chosen id like "profile" would collide across users.
     # The internal /internal/context endpoint strips this prefix back off.

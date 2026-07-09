@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from agent_kit.tools.base import Tool
+from harness_kit.tools.base import Tool
 from llm_kit import ToolDefinition
 
 from .client import error_detail, post_json

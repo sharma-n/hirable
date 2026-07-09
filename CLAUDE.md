@@ -53,13 +53,13 @@ company-type/location breakdowns) — see SPEC.md §10 and this file's M8 gotcha
 ## Architecture — three services
 
 ```
-[ Next.js :3000 ] ──WS/REST──▶ [ FastAPI :8000 ] ──WS──▶ [ agent_kit sidecar :8000 (internal) ]
+[ Next.js :3000 ] ──WS/REST──▶ [ FastAPI :8000 ] ──WS──▶ [ harness_kit sidecar :8000 (internal) ]
 ```
 
 - **frontend/** — Next.js 16 / TypeScript. Only published UI. Connects to backend only.
 - **backend/** — FastAPI / Python 3.13. System of record. DB, auth, public API, chat proxy,
   document rendering, scheduler. The only component with DB access.
-- **agent/** — agent_kit sidecar. Chat brain. **No published port** — Docker internal network only.
+- **agent/** — harness_kit sidecar. Chat brain. **No published port** — Docker internal network only.
   Backend reaches it at `http://agent:8000`; locally override with `AGENT_BASE_URL`.
 
 ---
@@ -72,14 +72,14 @@ company-type/location breakdowns) — see SPEC.md §10 and this file's M8 gotcha
 | `config.yaml` | Everything else: LLM model/endpoint, agent settings, tracking thresholds |
 
 `config.yaml` supports `${VAR:-default}` env expansion. The backend expands it via a small
-regex expander in `backend/app/config.py`. The agent sidecar expands it via agent_kit's own
+regex expander in `backend/app/config.py`. The agent sidecar expands it via harness_kit's own
 `_interpolate_env` (called inside `load_dict`).
 
 ---
 
-## agent_kit facts (learned from source / examples)
+## harness_kit facts (learned from source / examples)
 
-- **Install:** git URL only (not on PyPI): `agent_kit @ git+https://github.com/sharma-n/agent_kit`
+- **Install:** git URL only (not on PyPI): `harness_kit @ git+https://github.com/sharma-n/harness_kit`
   — pulls `llm_kit` transitively. Requires `[tool.hatch.metadata] allow-direct-references = true`
   in any `pyproject.toml` that lists it as a dependency.
 - **Python:** requires **3.13+**.
@@ -87,11 +87,11 @@ regex expander in `backend/app/config.py`. The agent sidecar expands it via agen
   call it directly** — it rejects unknown top-level keys (our `app:` block). Instead we load
   the YAML ourselves, strip `app:`, and call:
   ```python
-  from agent_kit.config.loader import load_dict
-  from agent_kit.config.schema import AgentKitConfig
-  from agent_kit.service import AgentService
-  from agent_kit.serving.app import create_app
-  service = AgentService.build(load_dict(AgentKitConfig, agent_raw))
+  from harness_kit.config.loader import load_dict
+  from harness_kit.config.schema import HarnessKitConfig
+  from harness_kit.service import AgentService
+  from harness_kit.serving.app import create_app
+  service = AgentService.build(load_dict(HarnessKitConfig, agent_raw))
   app = create_app(service)
   ```
   This is the same internal path `create_app_from_yaml` uses, so env-var interpolation runs.
@@ -111,18 +111,18 @@ regex expander in `backend/app/config.py`. The agent sidecar expands it via agen
   grants needed — every user gets the same core write tools).
 - **Tool injection (confirmed in M4):** `Tool(definition=ToolDefinition(name, description,
   parameters), handler=async (user_id: str, args: dict) -> str)` — `ToolDefinition`/`ToolCall` are
-  re-exported from `llm_kit`, `Tool` from `agent_kit.tools.base`. Register via
+  re-exported from `llm_kit`, `Tool` from `harness_kit.tools.base`. Register via
   `AgentService.build(cfg, extra_tools=[...], system_prompt_fn=...)` — both are keyword params on
   `build()`, not a post-construction call. **The registry converts an uncaught handler exception
   into `ToolResult(ok=False)`** — handlers don't need a blanket try/except, only special-case
   *expected* failures (404/422 from our internal API) into a readable observation string.
 - **Per-turn dynamic system prompt:** `system_prompt_fn: Callable[[str, str], Awaitable[str]]`
-  passed to `AgentService.build(...)`; agent_kit calls `await system_prompt_fn(user_id,
+  passed to `AgentService.build(...)`; harness_kit calls `await system_prompt_fn(user_id,
   conversation_id)` **fresh on every turn** and appends the result to the system prompt as a
   tier-0 (never-evicted) block. This is what lets hirable's tools be **write-only** — no
   `get_profile`/`list_jobs`/`get_job` tool is needed because the current profile (and job, in job
   mode) is injected automatically every turn instead of fetched on demand.
-- **Conversation ids are global and user-owned — namespace them.** agent_kit's `SessionStore.load`
+- **Conversation ids are global and user-owned — namespace them.** harness_kit's `SessionStore.load`
   raises `UnauthorizedError` on cross-user access to the *same* conversation id, so a
   client-chosen fixed id like `"profile"` would collide across different users. The backend's
   chat proxy (`app/api/chat.py`) prefixes every upstream conversation id with the trusted
@@ -139,7 +139,7 @@ regex expander in `backend/app/config.py`. The agent sidecar expands it via agen
 - **Conversation end:** `await service.agent.end_conversation(user_id, conv_id)` — call on WS
   disconnect to finalize working memory.
 
-## agent_kit config schema (key fields, as of M0)
+## harness_kit config schema (key fields, as of M0)
 
 ```yaml
 agent:
@@ -308,9 +308,9 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 
 ## Gotchas encountered during M0
 
-- **`app:` block must be stripped before passing config to agent_kit.** `AgentKitConfig`
+- **`app:` block must be stripped before passing config to harness_kit.** `HarnessKitConfig`
   rejects unknown top-level keys. In `bootstrap.py` we load the YAML ourselves, drop `app:`,
-  and call `AgentService.build(load_dict(AgentKitConfig, agent_raw))` directly — the same
+  and call `AgentService.build(load_dict(HarnessKitConfig, agent_raw))` directly — the same
   path `create_app_from_yaml` uses internally, so env-var interpolation still runs.
 
 - **Config path is never hardcoded to `/app/config.yaml`.** Both `agent/bootstrap.py` and
@@ -321,10 +321,10 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   `pyproject.toml` that uses git-URL dependencies, or hatchling refuses to build.
 - **No `public/` directory** in the Next.js frontend — don't add a `COPY public` step in
   the Dockerfile unless static assets are actually added.
-- **`per_tool_timeout_s`** is the correct agent_kit field name — not `per_turn_budget_s`.
+- **`per_tool_timeout_s`** is the correct harness_kit field name — not `per_turn_budget_s`.
 - **`memory.working.*`** is the correct nesting — the buffer config is not a flat `memory.*`.
-- agent_kit + llm_kit are **not on PyPI** — git URL install only.
-- agent_kit requires **Python 3.13+** — use `python:3.13-slim` in Dockerfiles.
+- harness_kit + llm_kit are **not on PyPI** — git URL install only.
+- harness_kit requires **Python 3.13+** — use `python:3.13-slim` in Dockerfiles.
 
 ## Gotchas encountered during M1
 
@@ -438,8 +438,8 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 ## Gotchas encountered during M4
 
 - **`app.internal_base_url` needs its own env-var expansion in `agent/bootstrap.py` — it does NOT
-  get one for free from agent_kit.** The `app:` block is read (`app_block = raw.get("app", {})`)
-  and then stripped out of the dict passed to `load_dict(AgentKitConfig, agent_raw)`; agent_kit's
+  get one for free from harness_kit.** The `app:` block is read (`app_block = raw.get("app", {})`)
+  and then stripped out of the dict passed to `load_dict(HarnessKitConfig, agent_raw)`; harness_kit's
   own `_interpolate_env` only ever sees `agent_raw`, never `app_block`. So `${VAR:-default}` syntax
   in `config.yaml`'s `app:` section (used e.g. by `internal_base_url`) is inert unless `bootstrap.py`
   expands it itself — added a small `_expand_env()` regex helper mirroring `backend/app/config.py`'s
@@ -452,11 +452,11 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   detail, and `system_prompt_fn`'s catch-all silently degraded to an empty context block instead of
   surfacing anything. Local dev now requires `INTERNAL_BASE_URL=http://localhost:8000` when
   starting the agent (see "Local dev" above) — **if you add a new `app:`-block config value that
-  the agent reads directly (not via agent_kit's own config), remember it needs `_expand_env()` too,
+  the agent reads directly (not via harness_kit's own config), remember it needs `_expand_env()` too,
   or it'll look fine in Docker and silently misbehave locally.**
 - **Tool handlers now catch `httpx.RequestError` explicitly** (`agent/tools/profile.py`'s `_post`
   helper) and turn it into a plain-language `"error: the profile service is temporarily
-  unreachable…"` observation, rather than relying solely on agent_kit's registry-level exception→
+  unreachable…"` observation, rather than relying solely on harness_kit's registry-level exception→
   `ToolResult(ok=False)` conversion — the raw exception text (e.g. "Name or service not known") is
   technically an observation the model receives, but it's not something the model can act on or
   explain to the user, so a readable message is substituted before it ever reaches the registry.
@@ -474,9 +474,9 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 - **This Starlette version has removed both `app.on_event` and `router.on_shutdown`** (confirmed:
   `hasattr(FastAPI, "add_event_handler")` is `False`, `hasattr(Starlette(), "on_event")` is
   `False`). There's no clean post-hoc shutdown hook to close the agent's shared internal-API
-  `httpx.AsyncClient` without reaching into `agent_kit`'s own internal `create_app(service)`
+  `httpx.AsyncClient` without reaching into `harness_kit`'s own internal `create_app(service)`
   lifespan. Decision: don't try — the client lives for the sidecar process's lifetime, which is
-  fine for a single-process container. Re-evaluate only if `agent_kit` ever exposes its own
+  fine for a single-process container. Re-evaluate only if `harness_kit` ever exposes its own
   extensible lifespan hook.
 - **`agent/` needed `httpx` added as an explicit direct dependency** (`uv add httpx` from
   `agent/`) even though it was already pulled in transitively via `llm_kit` — the rule (see
@@ -494,7 +494,7 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   item={"key": key, "value": value}` — reusing the same validation (against `EnrichmentItem`) and
   version-bump logic as every other list-section append, rather than adding a fourth internal
   route.
-- **Conversation ids must be namespaced by `user_id` before reaching the sidecar.** agent_kit's
+- **Conversation ids must be namespaced by `user_id` before reaching the sidecar.** harness_kit's
   session store is keyed globally by `conversation_id` and raises `UnauthorizedError` on
   cross-user access to the same id — since `AgentPanel` uses fixed, predictable ids (`"profile"`,
   `` `job:${jobId}` ``) so that revisiting a page resumes the same thread, two different users
@@ -542,13 +542,13 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
 - **The frontend transcript is client-side-only persistence, not a real conversation-history
   fetch.** `AgentPanel`'s `messages` React state used to reset to `[]` on every mount, so
   navigating away from `/profile` and back showed an empty chat even though the underlying
-  agent_kit session (same namespaced `conversationId`) was still alive server-side and the agent
+  harness_kit session (same namespaced `conversationId`) was still alive server-side and the agent
   kept replying with full context of the "invisible" prior turns. Fixed by mirroring the
   transcript to `localStorage` keyed by `messagesKey(conversationId)` (load on mount/reconnect,
   write on every update, via a `send()`/`updateMessages()` wrapper). This is per-browser only — a
   different browser or cleared storage shows an empty transcript on first load despite the agent
   still remembering everything. True cross-device history would need a new internal/backend
-  endpoint to replay agent_kit's stored turns; not built, since agent_kit's working-memory store
+  endpoint to replay harness_kit's stored turns; not built, since harness_kit's working-memory store
   wasn't explored for a turn-by-turn replay API during M4.
 - **Profile sections are collapsible with auto-expand-on-highlight**, not always-expanded.
   `SectionCard`/`EnrichmentSection` (`profile/page.tsx`) each hold local `open` state (chevron
@@ -615,8 +615,8 @@ cd frontend && NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 npm run dev
   test in `test_rendercv.py` that would otherwise have silently produced YAML which never surfaced
   the summary at all (extra dict keys are ignored by RenderCV's `BaseModelWithoutExtraKeys` in some
   contexts, so a naive `cv["summary"] = ...` doesn't even error — it just vanishes).
-- **`agent_kit`'s `Tool` handler signature is `(user_id, arguments) -> str` only — no
-  `conversation_id`.** Confirmed by reading `agent_kit/tools/base.py`'s `ToolHandler` type alias and
+- **`harness_kit`'s `Tool` handler signature is `(user_id, arguments) -> str` only — no
+  `conversation_id`.** Confirmed by reading `harness_kit/tools/base.py`'s `ToolHandler` type alias and
   `registry.py`'s `tool.handler(user_id, call.arguments)` call site. This matters because the
   original M5 plan assumed `draft_cv` could derive its target job from `conversation_id` the same way
   `system_prompt_fn` does (`_strip_namespace` in `internal/context.py`) — it can't, since only

@@ -42,7 +42,7 @@ To switch provider, edit the `llm_kit.llm` block in `config.yaml`:
 ## Architecture
 
 ```
-[ Next.js :3000 ] ──REST/WS──▶ [ FastAPI :8000 ] ──WS──▶ [ agent_kit (internal) ]
+[ Next.js :3000 ] ──REST/WS──▶ [ FastAPI :8000 ] ──WS──▶ [ harness_kit (internal) ]
                                   system of record              chat brain
 ```
 
